@@ -1,0 +1,25 @@
+package com.fluxusbackend.fluxusbackend.donationsmanagement.domain.model.events;
+
+import com.fluxusbackend.fluxusbackend.donationsmanagement.domain.model.valueobjects.DonationId;
+import java.time.Instant;
+import java.util.Objects;
+
+public final class DonationAssignedEvent {
+
+    private final DonationId donationId;
+    private final Instant occurredOn;
+
+    public DonationAssignedEvent(DonationId donationId, Instant occurredOn) {
+        this.donationId = Objects.requireNonNull(donationId, "Donation id is required");
+        this.occurredOn = Objects.requireNonNull(occurredOn, "Occurred time is required");
+    }
+
+    public DonationId getDonationId() {
+        return donationId;
+    }
+
+    public Instant getOccurredOn() {
+        return occurredOn;
+    }
+}
+

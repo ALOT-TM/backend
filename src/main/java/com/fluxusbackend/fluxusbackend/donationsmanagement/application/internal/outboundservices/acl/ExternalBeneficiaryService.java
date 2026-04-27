@@ -1,0 +1,22 @@
+package com.fluxusbackend.fluxusbackend.donationsmanagement.application.internal.outboundservices.acl;
+
+import com.fluxusbackend.fluxusbackend.beneficiariesmanagement.interfaces.acl.BeneficiariesContextFacade;
+import com.fluxusbackend.fluxusbackend.donationsmanagement.domain.model.valueobjects.BeneficiaryReferenceId;
+import java.util.Optional;
+import org.springframework.stereotype.Service;
+
+@Service
+public class ExternalBeneficiaryService {
+
+    private final BeneficiariesContextFacade beneficiariesContextFacade;
+
+    public ExternalBeneficiaryService(BeneficiariesContextFacade beneficiariesContextFacade) {
+        this.beneficiariesContextFacade = beneficiariesContextFacade;
+    }
+
+    public Optional<BeneficiaryReferenceId> fetchBeneficiaryById(Long beneficiaryId) {
+        var id = beneficiariesContextFacade.findBeneficiaryIdById(beneficiaryId);
+        return id == 0L ? Optional.empty() : Optional.of(new BeneficiaryReferenceId(id));
+    }
+}
+
