@@ -2,6 +2,51 @@
 
 Backend DDD con cuatro bounded contexts para gestionar merma, donaciones, beneficiarios e identidad.
 
+## Proposito del proyecto
+
+Este backend implementa un flujo realista de gestion de merma y donaciones con trazabilidad,
+separando responsabilidades por bounded context y aplicando patrones DDD y CQRS ligero.
+
+## Requisitos y entorno
+
+- Java 25 (segun `pom.xml`)
+- MySQL 8.x
+- Maven o Maven Wrapper (`mvnw.cmd`)
+
+## Estructura del proyecto
+
+```
+src/main/java/com/fluxusbackend/fluxusbackend/
+  shared/
+    domain/model/aggregates/AuditableAggregateRoot.java
+  mermamanagement/
+    domain/model/{aggregates,valueobjects,commands,queries,events,enums}
+    domain/services
+    application/internal/{commandservices,queryservices}
+    application/acl
+    infrastructure/persistence/jpa/repositories
+    interfaces/{rest/transform,acl}
+  donationsmanagement/
+    domain/model/{aggregates,valueobjects,commands,queries,events,enums}
+    domain/services
+    application/internal/{commandservices,queryservices,outboundservices/acl}
+    infrastructure/persistence/jpa/repositories
+    interfaces/rest/transform
+  beneficiariesmanagement/
+    domain/model/{aggregates,valueobjects,commands,queries,events,enums}
+    domain/services
+    application/internal/{commandservices,queryservices}
+    application/acl
+    infrastructure/persistence/jpa/repositories
+    interfaces/{rest/transform,acl}
+  identityaccessmanagement/
+    domain/model/{aggregates,valueobjects,commands,queries,enums}
+    domain/services
+    application/internal/{commandservices,queryservices}
+    infrastructure/persistence/jpa/repositories
+    interfaces/rest/transform
+```
+
 ## Resumen general
 
 El sistema cubre dos perspectivas:
@@ -293,6 +338,48 @@ Respuesta tipica (201/200):
 }
 ```
 
+## Ejemplos cURL (flujo completo)
+
+1) Registrar merma:
+```bash
+curl -X POST http://localhost:8080/api/mermas/register \
+  -H "Content-Type: application/json" \
+  -d '{"productName":"Yogurt Natural","categoryName":"Lacteos","quantity":12,"expirationDate":"2026-05-10","reason":"EXPIRATION"}'
+```
+
+2) Marcar merma como donable:
+```bash
+curl -X PATCH http://localhost:8080/api/mermas/1/donable
+```
+
+3) Registrar beneficiario:
+```bash
+curl -X POST http://localhost:8080/api/beneficiaries/register \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Colegio San Juan","type":"SCHOOL","address":"Av. Principal 123","acceptedProducts":["Lacteos","Conservas"]}'
+```
+
+4) Crear donacion:
+```bash
+curl -X POST http://localhost:8080/api/donations/create \
+  -H "Content-Type: application/json" \
+  -d '{"mermaReferenceId":1,"beneficiaryReferenceId":1,"quantity":5,"scheduledDeliveryDate":"2026-05-05"}'
+```
+
+5) Marcar entrega:
+```bash
+curl -X PATCH http://localhost:8080/api/donations/1/delivered \
+  -H "Content-Type: application/json" \
+  -d '{"deliveryDate":"2026-05-06"}'
+```
+
+6) Confirmar recepcion:
+```bash
+curl -X PATCH http://localhost:8080/api/donations/1/confirm \
+  -H "Content-Type: application/json" \
+  -d '{"receptionDate":"2026-05-06","comment":"Recepcion completa"}'
+```
+
 ## Validaciones y reglas de negocio
 
 - IDs deben ser positivos.
@@ -322,6 +409,19 @@ Respuesta tipica (201/200):
 - Swagger documenta respuestas y errores basicos.
 - Se usa `AuditableAggregateRoot` para `id`, `createdAt`, `updatedAt`.
 - IAM devuelve usuario sin exponer `passwordHash`.
+
+## Limitaciones conocidas
+
+- No hay autenticacion con tokens; solo login/registro.
+- No hay validaciones con anotaciones Bean Validation en records.
+- Manejo de errores usa respuestas por defecto de Spring.
+
+## Roadmap sugerido
+
+- Agregar JWT y filtros de seguridad.
+- Implementar `@ControllerAdvice` para errores consistentes.
+- Agregar paginacion en listados.
+- Test unitarios para reglas de negocio.
 
 ## Como ejecutar
 
