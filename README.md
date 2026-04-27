@@ -423,6 +423,132 @@ curl -X PATCH http://localhost:8080/api/donations/1/confirm \
 - Agregar paginacion en listados.
 - Test unitarios para reglas de negocio.
 
+## Glosario del dominio
+
+- Merma: producto fuera de inventario regular por vencimiento, daño o sobrestock.
+- Donable: merma apta para donacion por criterio del encargado.
+- Donacion: asignacion de merma a un beneficiario con fechas de entrega y recepcion.
+- Beneficiario: institucion que recibe donaciones (colegio, albergue u ONG).
+- Usuario Retail: encargado/administrador que opera la merma y las donaciones.
+- IAM: identidad y acceso; registro y autenticacion basica.
+
+## Matriz de permisos (conceptual)
+
+- Retail (RETAIL_ADMIN / RETAIL_MANAGER):
+  - Puede registrar merma, clasificar donable/no donable y crear donaciones.
+  - Puede registrar/editar beneficiarios y activar/desactivar.
+  - Puede ver reportes operativos via endpoints.
+- Beneficiario (BENEFICIARY):
+  - Puede ver sus donaciones asignadas y confirmar recepcion.
+  - No puede registrar merma ni crear donaciones.
+
+Nota: la seguridad por roles no esta implementada aun (ver Limitaciones).
+
+## Codigos HTTP esperados (guia)
+
+- 200 OK: consulta o actualizacion exitosa.
+- 201 Created: registro/creacion exitosa.
+- 400 Bad Request: validacion o entrada invalida.
+- 404 Not Found: recurso no encontrado.
+- 409 Conflict: conflicto de negocio (ej. duplicados).
+- 500 Internal Server Error: error no controlado.
+
+## Parametros de configuracion
+
+`src/main/resources/application.properties`:
+- `spring.datasource.url` URL MySQL (crea DB si no existe).
+- `spring.datasource.username` usuario MySQL.
+- `spring.datasource.password` password MySQL.
+- `spring.jpa.hibernate.ddl-auto` estrategia de schema (`update`).
+- `springdoc.api-docs.path` ruta OpenAPI.
+- `springdoc.swagger-ui.path` ruta Swagger UI.
+
+## Catalogo de requests (todas las operaciones)
+
+Merma:
+- Register (`POST /api/mermas/register`):
+```json
+{
+  "productName": "Yogurt Natural",
+  "categoryName": "Lacteos",
+  "quantity": 12,
+  "expirationDate": "2026-05-10",
+  "reason": "EXPIRATION"
+}
+```
+- Donable (`PATCH /api/mermas/{mermaId}/donable`): sin body.
+- Not Donable (`PATCH /api/mermas/{mermaId}/not-donable`): sin body.
+- Donated (`PATCH /api/mermas/{mermaId}/donated`): sin body.
+
+Beneficiarios:
+- Register (`POST /api/beneficiaries/register`):
+```json
+{
+  "name": "Colegio San Juan",
+  "type": "SCHOOL",
+  "address": "Av. Principal 123",
+  "acceptedProducts": ["Lacteos", "Conservas"]
+}
+```
+- Update (`PUT /api/beneficiaries/{beneficiaryId}`):
+```json
+{
+  "name": "Colegio San Juan",
+  "type": "SCHOOL",
+  "address": "Av. Principal 123",
+  "acceptedProducts": ["Lacteos", "Conservas", "Granos"]
+}
+```
+- Activate/Deactivate (`PATCH /api/beneficiaries/{beneficiaryId}/activate|deactivate`): sin body.
+
+Donaciones:
+- Create (`POST /api/donations/create`):
+```json
+{
+  "mermaReferenceId": 1,
+  "beneficiaryReferenceId": 2,
+  "quantity": 5,
+  "scheduledDeliveryDate": "2026-05-05"
+}
+```
+- Delivered (`PATCH /api/donations/{donationId}/delivered`):
+```json
+{
+  "deliveryDate": "2026-05-06"
+}
+```
+- Confirm (`PATCH /api/donations/{donationId}/confirm`):
+```json
+{
+  "receptionDate": "2026-05-06",
+  "comment": "Recepcion completa"
+}
+```
+
+IAM:
+- Register (`POST /api/iam/register`):
+```json
+{
+  "email": "admin@retail.com",
+  "rawPassword": "admin123",
+  "role": "RETAIL_ADMIN"
+}
+```
+- Login (`POST /api/iam/login`):
+```json
+{
+  "email": "admin@retail.com",
+  "rawPassword": "admin123"
+}
+```
+
+## Supuestos del proyecto
+
+- La merma registrada ya no pertenece al inventario general.
+- La decision donable/no donable es responsabilidad del usuario retail.
+- Beneficiarios desactivados no deben recibir nuevas donaciones.
+- La confirmacion de recepcion cierra el ciclo de la donacion.
+
 ## Como ejecutar
 
 Si no tienes Maven instalado, usa el wrapper:
