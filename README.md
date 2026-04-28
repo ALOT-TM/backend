@@ -184,21 +184,46 @@ MermaReason: `EXPIRATION`, `DAMAGED_PACKAGING`, `OVERSTOCK`
 BeneficiaryStatus: `ACTIVE`, `INACTIVE`
 BeneficiaryType: `SCHOOL`, `SHELTER`, `NGO`
 DonationStatus: `ASSIGNED`, `DELIVERED`, `CONFIRMED`
-UserRole: `RETAIL_ADMIN`, `RETAIL_MANAGER`, `BENEFICIARY`
+UserRole: `RETAIL_MANAGER`, `BENEFICIARY`
 UserStatus: `ACTIVE`, `INACTIVE`
 
-## Endpoints
+## Endpoints (mapa rapido)
 
-### Merma Management
-- `POST /api/mermas/register` registra merma
-- `PATCH /api/mermas/{mermaId}/donable` marca como donable
-- `PATCH /api/mermas/{mermaId}/not-donable` marca como no donable
-- `PATCH /api/mermas/{mermaId}/donated` marca como donada
-- `GET /api/mermas/{mermaId}` obtiene merma por id
-- `GET /api/mermas?status=REGISTERED|DONABLE|DONATED|NOT_DONABLE` lista por estado
+Merma:
+- `POST /api/mermas/register`
+- `PATCH /api/mermas/{mermaId}/donable`
+- `PATCH /api/mermas/{mermaId}/not-donable`
+- `PATCH /api/mermas/{mermaId}/donated`
+- `GET /api/mermas/{mermaId}`
+- `GET /api/mermas?status=REGISTERED|DONABLE|DONATED|NOT_DONABLE`
 
-Request ejemplo (register):
-```json
+Beneficiarios:
+- `POST /api/beneficiaries/register`
+- `PUT /api/beneficiaries/{beneficiaryId}`
+- `PATCH /api/beneficiaries/{beneficiaryId}/activate`
+- `PATCH /api/beneficiaries/{beneficiaryId}/deactivate`
+- `GET /api/beneficiaries/{beneficiaryId}`
+- `GET /api/beneficiaries?status=ACTIVE|INACTIVE`
+
+Donaciones:
+- `POST /api/donations/create`
+- `PATCH /api/donations/{donationId}/delivered`
+- `PATCH /api/donations/{donationId}/confirm`
+- `GET /api/donations/{donationId}`
+- `GET /api/donations?status=ASSIGNED|DELIVERED|CONFIRMED`
+- `GET /api/donations/by-beneficiary/{beneficiaryId}`
+
+IAM:
+- `POST /api/iam/register`
+- `POST /api/iam/login`
+
+## Ejemplos rapidos por contexto
+
+Merma (registrar y marcar donable):
+```http
+POST /api/mermas/register
+Content-Type: application/json
+
 {
   "productName": "Yogurt Natural",
   "categoryName": "Lacteos",
@@ -207,32 +232,15 @@ Request ejemplo (register):
   "reason": "EXPIRATION"
 }
 ```
-
-Respuesta tipica (201/200):
-```json
-{
-  "id": 1,
-  "productName": "Yogurt Natural",
-  "categoryName": "Lacteos",
-  "quantity": 12,
-  "expirationDate": "2026-05-10",
-  "reason": "EXPIRATION",
-  "status": "REGISTERED",
-  "createdAt": "2026-04-27T02:00:00Z",
-  "updatedAt": "2026-04-27T02:00:00Z"
-}
+```http
+PATCH /api/mermas/1/donable
 ```
 
-### Beneficiaries Management
-- `POST /api/beneficiaries/register` registra beneficiario
-- `PUT /api/beneficiaries/{beneficiaryId}` actualiza informacion
-- `PATCH /api/beneficiaries/{beneficiaryId}/activate` activa
-- `PATCH /api/beneficiaries/{beneficiaryId}/deactivate` desactiva
-- `GET /api/beneficiaries/{beneficiaryId}` obtiene por id
-- `GET /api/beneficiaries?status=ACTIVE|INACTIVE` lista por estado
+Beneficiarios (registrar y desactivar):
+```http
+POST /api/beneficiaries/register
+Content-Type: application/json
 
-Request ejemplo (register):
-```json
 {
   "name": "Colegio San Juan",
   "type": "SCHOOL",
@@ -240,101 +248,50 @@ Request ejemplo (register):
   "acceptedProducts": ["Lacteos", "Conservas"]
 }
 ```
-
-Respuesta tipica (201/200):
-```json
-{
-  "id": 1,
-  "name": "Colegio San Juan",
-  "type": "SCHOOL",
-  "address": "Av. Principal 123",
-  "status": "ACTIVE",
-  "acceptedProducts": ["Lacteos", "Conservas"],
-  "createdAt": "2026-04-27T02:00:00Z",
-  "updatedAt": "2026-04-27T02:00:00Z"
-}
+```http
+PATCH /api/beneficiaries/1/deactivate
 ```
 
-### Donations Management
-- `POST /api/donations/create` crea donacion (asignada)
-- `PATCH /api/donations/{donationId}/delivered` marca entregada
-- `PATCH /api/donations/{donationId}/confirm` confirma recepcion
-- `GET /api/donations/{donationId}` obtiene por id
-- `GET /api/donations?status=ASSIGNED|DELIVERED|CONFIRMED` lista por estado
-- `GET /api/donations/by-beneficiary/{beneficiaryId}` lista por beneficiario
+Donaciones (crear y confirmar):
+```http
+POST /api/donations/create
+Content-Type: application/json
 
-Request ejemplo (create):
-```json
 {
   "mermaReferenceId": 1,
-  "beneficiaryReferenceId": 2,
+  "beneficiaryReferenceId": 1,
   "quantity": 5,
   "scheduledDeliveryDate": "2026-05-05"
 }
 ```
+```http
+PATCH /api/donations/1/confirm
+Content-Type: application/json
 
-Request ejemplo (delivered):
-```json
-{
-  "deliveryDate": "2026-05-06"
-}
-```
-
-Request ejemplo (confirm):
-```json
 {
   "receptionDate": "2026-05-06",
   "comment": "Recepcion completa"
 }
 ```
 
-Respuesta tipica (201/200):
-```json
-{
-  "id": 10,
-  "mermaReferenceId": 1,
-  "beneficiaryReferenceId": 2,
-  "quantity": 5,
-  "scheduledDeliveryDate": "2026-05-05",
-  "deliveryDate": "2026-05-06",
-  "receptionDate": "2026-05-06",
-  "receptionComment": "Recepcion completa",
-  "status": "CONFIRMED",
-  "createdAt": "2026-04-27T02:00:00Z",
-  "updatedAt": "2026-04-27T02:00:00Z"
-}
-```
+IAM (registro y login):
+```http
+POST /api/iam/register
+Content-Type: application/json
 
-### Identity & Access Management (IAM)
-- `POST /api/iam/register` registra usuario
-- `POST /api/iam/login` autentica usuario
-
-Request ejemplo (register):
-```json
 {
-  "email": "admin@retail.com",
+  "email": "manager@retail.com",
   "rawPassword": "admin123",
-  "role": "RETAIL_ADMIN"
+  "role": "RETAIL_MANAGER"
 }
 ```
+```http
+POST /api/iam/login
+Content-Type: application/json
 
-Request ejemplo (login):
-```json
 {
-  "email": "admin@retail.com",
+  "email": "manager@retail.com",
   "rawPassword": "admin123"
-}
-```
-
-Respuesta tipica (201/200):
-```json
-{
-  "id": 1,
-  "email": "admin@retail.com",
-  "role": "RETAIL_ADMIN",
-  "status": "ACTIVE",
-  "createdAt": "2026-04-27T02:00:00Z",
-  "updatedAt": "2026-04-27T02:00:00Z"
 }
 ```
 
@@ -434,7 +391,7 @@ curl -X PATCH http://localhost:8080/api/donations/1/confirm \
 
 ## Matriz de permisos (conceptual)
 
-- Retail (RETAIL_ADMIN / RETAIL_MANAGER):
+- Retail (RETAIL_MANAGER):
   - Puede registrar merma, clasificar donable/no donable y crear donaciones.
   - Puede registrar/editar beneficiarios y activar/desactivar.
   - Puede ver reportes operativos via endpoints.
@@ -531,7 +488,7 @@ IAM:
 {
   "email": "admin@retail.com",
   "rawPassword": "admin123",
-  "role": "RETAIL_ADMIN"
+  "role": "RETAIL_MANAGER"
 }
 ```
 - Login (`POST /api/iam/login`):
