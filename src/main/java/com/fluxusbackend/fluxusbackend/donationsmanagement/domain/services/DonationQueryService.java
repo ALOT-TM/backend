@@ -4,6 +4,8 @@ import com.fluxusbackend.fluxusbackend.donationsmanagement.domain.model.aggregat
 import com.fluxusbackend.fluxusbackend.donationsmanagement.domain.model.queries.GetDonationByIdQuery;
 import com.fluxusbackend.fluxusbackend.donationsmanagement.domain.model.queries.ListDonationsByBeneficiaryQuery;
 import com.fluxusbackend.fluxusbackend.donationsmanagement.domain.model.queries.ListDonationsByStatusQuery;
+import com.fluxusbackend.fluxusbackend.donationsmanagement.domain.model.queries.ListDonationStatisticsQuery;
+import com.fluxusbackend.fluxusbackend.donationsmanagement.interfaces.rest.dto.DonationStatisticDto;
 import java.util.List;
 import java.util.Optional;
 
@@ -13,5 +15,6 @@ public interface DonationQueryService {
     List<Donation> handle(ListDonationsByStatusQuery query);
 
     List<Donation> handle(ListDonationsByBeneficiaryQuery query);
+    List<DonationStatisticDto> handle(ListDonationStatisticsQuery query);
 }
 

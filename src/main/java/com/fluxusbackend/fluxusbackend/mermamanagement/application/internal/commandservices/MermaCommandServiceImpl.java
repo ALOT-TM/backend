@@ -15,9 +15,12 @@ import org.springframework.stereotype.Service;
 public class MermaCommandServiceImpl implements MermaCommandService {
 
     private final MermaRepository repository;
+    private final com.fluxusbackend.fluxusbackend.shared.application.security.AclService aclService;
 
-    public MermaCommandServiceImpl(MermaRepository repository) {
+    public MermaCommandServiceImpl(MermaRepository repository,
+                                    com.fluxusbackend.fluxusbackend.shared.application.security.AclService aclService) {
         this.repository = repository;
+        this.aclService = aclService;
     }
 
     @Override
@@ -30,6 +33,8 @@ public class MermaCommandServiceImpl implements MermaCommandService {
                 command.expirationDate(),
                 command.reason()
         );
+        var companyId = aclService.requireRetailCompanyForCreate();
+        merma.setCompanyId(companyId);
         return repository.save(merma);
     }
 
@@ -38,6 +43,7 @@ public class MermaCommandServiceImpl implements MermaCommandService {
     public Merma handle(MarkMermaDonableCommand command) {
         var merma = repository.findById(command.mermaId().value())
                 .orElseThrow(() -> new NoSuchElementException("Merma not found"));
+        aclService.ensureSameCompanyForRetail(merma);
         merma.markDonable();
         return repository.save(merma);
     }
@@ -47,6 +53,7 @@ public class MermaCommandServiceImpl implements MermaCommandService {
     public Merma handle(MarkMermaNotDonableCommand command) {
         var merma = repository.findById(command.mermaId().value())
                 .orElseThrow(() -> new NoSuchElementException("Merma not found"));
+        aclService.ensureSameCompanyForRetail(merma);
         merma.markNotDonable();
         return repository.save(merma);
     }
@@ -56,6 +63,7 @@ public class MermaCommandServiceImpl implements MermaCommandService {
     public Merma handle(MarkMermaDonatedCommand command) {
         var merma = repository.findById(command.mermaId().value())
                 .orElseThrow(() -> new NoSuchElementException("Merma not found"));
+        aclService.ensureSameCompanyForRetail(merma);
         merma.markDonated();
         return repository.save(merma);
     }

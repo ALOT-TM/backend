@@ -27,6 +27,9 @@ public class UserAuthenticationQueryServiceImpl implements UserAuthenticationQue
         if (!passwordEncoder.matches(query.rawPassword(), user.getPasswordHash().value())) {
             throw new NoSuchElementException("Invalid credentials");
         }
+        if (user.getCompanyId().isEmpty()) {
+            throw new NoSuchElementException("User has no company assigned");
+        }
         return user;
     }
 }

@@ -1,16 +1,23 @@
 package com.fluxusbackend.fluxusbackend.identityaccessmanagement.interfaces.rest.transform;
 
 import com.fluxusbackend.fluxusbackend.identityaccessmanagement.domain.model.aggregates.UserAccount;
+import com.fluxusbackend.fluxusbackend.identityaccessmanagement.domain.model.dto.AuthenticatedUser;
 import com.fluxusbackend.fluxusbackend.identityaccessmanagement.domain.model.commands.RegisterUserCommand;
 import com.fluxusbackend.fluxusbackend.identityaccessmanagement.domain.model.queries.LoginUserQuery;
 import com.fluxusbackend.fluxusbackend.identityaccessmanagement.domain.services.UserAuthenticationQueryService;
 import com.fluxusbackend.fluxusbackend.identityaccessmanagement.domain.services.UserCommandService;
+import com.fluxusbackend.fluxusbackend.shared.application.security.JwtTokenService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import com.fluxusbackend.fluxusbackend.identityaccessmanagement.domain.model.dto.Profile;
+import com.fluxusbackend.fluxusbackend.shared.application.security.AuthenticatedUserPrincipal;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -26,13 +33,16 @@ public class IamController {
 
     private final UserCommandService userCommandService;
     private final UserAuthenticationQueryService userAuthenticationQueryService;
+        private final JwtTokenService jwtTokenService;
 
     public IamController(
             UserCommandService userCommandService,
-            UserAuthenticationQueryService userAuthenticationQueryService
+                        UserAuthenticationQueryService userAuthenticationQueryService,
+                        JwtTokenService jwtTokenService
     ) {
         this.userCommandService = userCommandService;
         this.userAuthenticationQueryService = userAuthenticationQueryService;
+                this.jwtTokenService = jwtTokenService;
     }
 
     @PostMapping("/register")
@@ -51,11 +61,24 @@ public class IamController {
     @Operation(summary = "Login user")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Login successful",
-                    content = @Content(schema = @Schema(implementation = UserAccount.class))),
+                                        content = @Content(schema = @Schema(implementation = AuthenticatedUser.class))),
             @ApiResponse(responseCode = "401", description = "Invalid credentials", content = @Content)
     })
-    public UserAccount login(@Valid @RequestBody LoginUserQuery query) {
-        return userAuthenticationQueryService.handle(query);
+        public AuthenticatedUser login(@Valid @RequestBody LoginUserQuery query) {
+                var user = userAuthenticationQueryService.handle(query);
+                var token = jwtTokenService.generateToken(user);
+                return new AuthenticatedUser(user, token);
     }
+
+        @GetMapping("/profile")
+        public Profile profile() {
+                Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+                if (auth == null || !(auth.getPrincipal() instanceof AuthenticatedUserPrincipal principal)) {
+                        return new Profile(null, null, null);
+                }
+                var companyId = principal.companyId();
+                Long companyLong = companyId == null ? null : companyId.value();
+                return new Profile(companyLong, principal.email(), principal.role().name());
+        }
 }
 

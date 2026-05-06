@@ -21,5 +21,12 @@ public class BeneficiariesContextFacadeImpl implements BeneficiariesContextFacad
         var beneficiary = beneficiaryQueryService.handle(query);
         return beneficiary.map(value -> value.getBeneficiaryId().value()).orElse(0L);
     }
+
+    @Override
+    public String findBeneficiaryNameById(Long beneficiaryId) {
+        var query = new GetBeneficiaryByIdQuery(new BeneficiaryId(beneficiaryId));
+        var beneficiary = beneficiaryQueryService.handle(query);
+        return beneficiary.map(value -> value.getName().value()).orElse("Unknown");
+    }
 }
 

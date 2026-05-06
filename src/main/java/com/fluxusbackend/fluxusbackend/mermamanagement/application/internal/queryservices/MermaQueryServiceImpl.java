@@ -3,6 +3,7 @@ package com.fluxusbackend.fluxusbackend.mermamanagement.application.internal.que
 import com.fluxusbackend.fluxusbackend.mermamanagement.domain.model.aggregates.Merma;
 import com.fluxusbackend.fluxusbackend.mermamanagement.domain.model.queries.GetMermaByIdQuery;
 import com.fluxusbackend.fluxusbackend.mermamanagement.domain.model.queries.ListMermasByStatusQuery;
+import com.fluxusbackend.fluxusbackend.mermamanagement.domain.model.queries.ListMermasByCompanyQuery;
 import com.fluxusbackend.fluxusbackend.mermamanagement.domain.services.MermaQueryService;
 import com.fluxusbackend.fluxusbackend.mermamanagement.infrastructure.persistence.jpa.repositories.MermaRepository;
 import java.util.List;
@@ -29,6 +30,13 @@ public class MermaQueryServiceImpl implements MermaQueryService {
     @Transactional(readOnly = true)
     public List<Merma> handle(ListMermasByStatusQuery query) {
         return repository.findByStatus(query.status());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Merma> handle(ListMermasByCompanyQuery query) {
+        var companyId = query.companyId();
+        return repository.findByCompanyIdValue(companyId.value());
     }
 }
 

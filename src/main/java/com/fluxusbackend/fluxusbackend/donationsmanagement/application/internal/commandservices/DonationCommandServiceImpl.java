@@ -18,15 +18,18 @@ public class DonationCommandServiceImpl implements DonationCommandService {
     private final DonationRepository repository;
     private final ExternalMermaService externalMermaService;
     private final ExternalBeneficiaryService externalBeneficiaryService;
+    private final com.fluxusbackend.fluxusbackend.shared.application.security.AclService aclService;
 
     public DonationCommandServiceImpl(
             DonationRepository repository,
             ExternalMermaService externalMermaService,
-            ExternalBeneficiaryService externalBeneficiaryService
+            ExternalBeneficiaryService externalBeneficiaryService,
+            com.fluxusbackend.fluxusbackend.shared.application.security.AclService aclService
     ) {
         this.repository = repository;
         this.externalMermaService = externalMermaService;
         this.externalBeneficiaryService = externalBeneficiaryService;
+        this.aclService = aclService;
     }
 
     @Override
@@ -43,6 +46,14 @@ public class DonationCommandServiceImpl implements DonationCommandService {
                 command.quantity(),
                 command.scheduledDeliveryDate()
         );
+        // require retail user and set company id on donation to match merma
+        var companyId = aclService.requireRetailCompanyForCreate();
+        // verify merma belongs to same company
+        var mermaCompany = externalMermaService.fetchMermaCompanyId(merma.value());
+        if (mermaCompany.isEmpty() || !mermaCompany.get().equals(companyId.value())) {
+            throw new SecurityException("Merma does not belong to the current user's company");
+        }
+        donation.setCompanyId(companyId);
         return repository.save(donation);
     }
 
@@ -51,6 +62,7 @@ public class DonationCommandServiceImpl implements DonationCommandService {
     public Donation handle(MarkDonationDeliveredCommand command) {
         var donation = repository.findById(command.donationId().value())
                 .orElseThrow(() -> new NoSuchElementException("Donation not found"));
+        aclService.ensureSameCompanyForRetail(donation);
         donation.markDelivered(command.deliveryDate());
         return repository.save(donation);
     }
@@ -60,6 +72,7 @@ public class DonationCommandServiceImpl implements DonationCommandService {
     public Donation handle(ConfirmDonationReceptionCommand command) {
         var donation = repository.findById(command.donationId().value())
                 .orElseThrow(() -> new NoSuchElementException("Donation not found"));
+        aclService.ensureSameCompanyForRetail(donation);
         donation.confirmReception(command.receptionDate(), command.comment());
         repository.save(donation);
         var updated = externalMermaService.markMermaDonated(donation.getMermaReferenceId().value());

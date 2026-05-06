@@ -19,6 +19,11 @@ public class ExternalMermaService {
         return id == 0L ? Optional.empty() : Optional.of(new MermaReferenceId(id));
     }
 
+    public Optional<Long> fetchMermaCompanyId(Long mermaId) {
+        var companyId = mermaContextFacade.findCompanyIdByMermaId(mermaId);
+        return companyId == null || companyId == 0L ? Optional.empty() : Optional.of(companyId);
+    }
+
     public boolean markMermaDonated(Long mermaId) {
         return mermaContextFacade.markMermaDonated(mermaId);
     }

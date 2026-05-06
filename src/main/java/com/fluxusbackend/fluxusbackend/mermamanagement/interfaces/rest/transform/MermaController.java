@@ -13,6 +13,11 @@ import com.fluxusbackend.fluxusbackend.mermamanagement.domain.model.queries.List
 import com.fluxusbackend.fluxusbackend.mermamanagement.domain.model.valueobjects.MermaId;
 import com.fluxusbackend.fluxusbackend.mermamanagement.domain.services.MermaCommandService;
 import com.fluxusbackend.fluxusbackend.mermamanagement.domain.services.MermaQueryService;
+import com.fluxusbackend.fluxusbackend.mermamanagement.domain.model.queries.ListMermasByCompanyQuery;
+import com.fluxusbackend.fluxusbackend.identityaccessmanagement.domain.services.UserQueryService;
+import com.fluxusbackend.fluxusbackend.identityaccessmanagement.domain.model.queries.GetUserByIdQuery;
+import com.fluxusbackend.fluxusbackend.identityaccessmanagement.domain.model.valueobjects.UserId;
+import com.fluxusbackend.fluxusbackend.shared.domain.model.valueobjects.CompanyId;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -41,12 +46,14 @@ public class MermaController {
     private final MermaCommandService commandService;
     private final MermaQueryService queryService;
     private final AuthorizationService authorizationService;
+        private final UserQueryService userQueryService;
 
-    public MermaController(MermaCommandService commandService, MermaQueryService queryService,
-            AuthorizationService authorizationService) {
-        this.commandService = commandService;
-        this.queryService = queryService;
-        this.authorizationService = authorizationService;
+        public MermaController(MermaCommandService commandService, MermaQueryService queryService,
+                        AuthorizationService authorizationService, UserQueryService userQueryService) {
+                this.commandService = commandService;
+                this.queryService = queryService;
+                this.authorizationService = authorizationService;
+                this.userQueryService = userQueryService;
     }
 
     @PostMapping("/register")
@@ -139,4 +146,23 @@ public class MermaController {
         authorizationService.requireRole(userId, UserRole.MANAGER);
         return queryService.handle(new ListMermasByStatusQuery(status));
     }
+
+        @GetMapping("/company")
+        @Operation(summary = "List mermas for manager's company")
+        public List<Merma> listByCompany(
+                        @RequestHeader("X-User-Id") Long userId) {
+                authorizationService.requireRole(userId, UserRole.MANAGER);
+                var user = userQueryService.handle(new GetUserByIdQuery(new UserId(userId)))
+                                .orElseThrow(() -> new IllegalArgumentException("Unknown user"));
+                var companyId = user.getCompanyId().orElseThrow(() -> new IllegalArgumentException("User has no company"));
+                return queryService.handle(new ListMermasByCompanyQuery(companyId));
+        }
+
+        @GetMapping("/donable")
+        @Operation(summary = "List donable mermas for beneficiaries")
+        public List<Merma> listDonableForBeneficiary(
+                        @RequestHeader("X-User-Id") Long userId) {
+                authorizationService.requireRole(userId, UserRole.BENEFICIARY);
+                return queryService.handle(new ListMermasByStatusQuery(MermaStatus.DONABLE));
+        }
 }

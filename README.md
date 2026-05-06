@@ -1,6 +1,6 @@
 # FluxusBackend
 
-Backend DDD con cuatro bounded contexts para gestionar merma, donaciones, beneficiarios e identidad.
+Backend DDD con bounded contexts para gestionar merma, donaciones, beneficiarios, identidad y compañías.
 
 ## Proposito del proyecto
 
@@ -19,6 +19,9 @@ separando responsabilidades por bounded context y aplicando patrones DDD y CQRS 
 src/main/java/com/fluxusbackend/fluxusbackend/
   shared/
     domain/model/aggregates/AuditableAggregateRoot.java
+    domain/model/valueobjects/CompanyId.java
+  companymanagement/
+    domain/model/aggregates/Company.java
   mermamanagement/
     domain/model/{aggregates,valueobjects,commands,queries,events,enums}
     domain/services
@@ -45,6 +48,8 @@ src/main/java/com/fluxusbackend/fluxusbackend/
     application/internal/{commandservices,queryservices}
     infrastructure/persistence/jpa/repositories
     interfaces/rest/transform
+  config/SecurityConfig.java
+  shared/application/security/{JwtTokenService,JwtAuthenticationFilter,CurrentUserProvider,AuthenticatedUserPrincipal,AclService}.java
 ```
 
 ## Resumen general
@@ -59,6 +64,20 @@ Flujo principal:
 3) Crear donacion y asignar beneficiario.
 4) Marcar entrega.
 5) Beneficiario confirma recepcion.
+
+## Estado actual del código
+
+Este repositorio está en un estado funcional y compilable. Cambios principales implementados y activos en el códigobase:
+
+- Autenticación vía JWT usando `JwtTokenService` y `JwtAuthenticationFilter` (token HMAC). Login emite un JWT que contiene `userId`, `email`, `companyId` y `role`.
+- `AuthenticatedUserPrincipal` y `CurrentUserProvider` exponen el usuario actual desde `SecurityContext` para ACLs y servicios.
+- `CompanyId` agregado como Value Object embebido en `AuditableAggregateRoot` y en `UserAccount`.
+- `Company` aggregate creado para representar empresas retail.
+- ACLs aplicadas para asegurar que usuarios con rol `MANAGER` sólo gestionen datos de su `companyId` en contextos como Merma y Donations.
+- Endpoint adicional `GET /api/iam/profile` expone el perfil del usuario autenticado (companyId, email, role).
+- El proyecto compila correctamente con `mvn -DskipTests package`.
+
+Estos cambios buscan soportar multi-tenancy por `companyId`, separación de contextos y autenticación segura para APIs.
 
 ## Arquitectura y capas
 
@@ -115,6 +134,25 @@ Reglas clave:
 - Solo una donacion `DELIVERED` puede pasar a `CONFIRMED`.
 - Al confirmar recepcion se marca la merma como `DONATED` via ACL.
 
+### Donation Requests (within Donations Management)
+Responsibility: allow beneficiaries to claim donable mermas and notify the retail manager.
+
+- Aggregate Root: `DonationRequest`
+- Value Objects: `DonationRequestId`, `MermaReferenceId`, `BeneficiaryReferenceId`
+- Enum: `DonationRequestStatus`
+- Commands: `CreateDonationRequestCommand`, `AcceptDonationRequestCommand`, `RejectDonationRequestCommand`, `CancelDonationRequestCommand`
+- Queries: `GetDonationRequestByIdQuery`, `ListDonationRequestsByBeneficiaryQuery`, `ListDonationRequestsByMermaQuery`
+- Repository: `DonationRequestRepository`
+- Services: `DonationRequestCommandService`, `DonationRequestQueryService`
+- Endpoint: `/api/requests`
+
+Rules:
+- A request starts in `PENDING`.
+- A manager can `ACCEPT` or `REJECT` a request.
+- A beneficiary can `CANCEL` a request if it is `PENDING` or `ACCEPTED`.
+- A request is marked `COMPLETED` once it reaches that state after being accepted.
+- A donable merma can have multiple requests from different beneficiaries.
+
 ### Beneficiaries Management
 Responsabilidad: administrar instituciones beneficiarias y su disponibilidad.
 
@@ -137,7 +175,7 @@ Reglas clave:
 Responsabilidad: registro y autenticacion de usuarios internos y beneficiarios.
 
 - Aggregate Root: `UserAccount`
-- Value Objects: `UserId`, `EmailAddress`, `PasswordHash`
+- Value Objects: `UserId`, `EmailAddress`, `PasswordHash`, `CompanyId`
 - Enums: `UserRole`, `UserStatus`
 - Commands: `RegisterUserCommand`
 - Queries: `GetUserByIdQuery`, `GetUserByEmailQuery`, `LoginUserQuery`
@@ -146,30 +184,49 @@ Responsabilidad: registro y autenticacion de usuarios internos y beneficiarios.
 
 Reglas clave:
 - Registro requiere email valido y password >= 6.
-- Login valida credenciales (hash con BCrypt).
+- Login valida credenciales (hash con BCrypt) y emite JWT con `userId`, `email`, `companyId` y `role`.
+
+### Company Management
+Responsabilidad: agrupar la informacion operativa por empresa/cliente retail.
+
+- Aggregate Root: `Company`
+- Value Objects: `CompanyId`
+- Atributos principales: `name`, `headquarters`
+
+Reglas clave:
+- Cada usuario interno queda asociado a una `companyId`.
+- La informacion operativa de merma y donacion queda aislada por `companyId` para usuarios retail.
 
 ## Integraciones entre contextos (ACL)
 
 - Donations consume Merma y Beneficiaries via ACL (facades) para evitar acoplamiento.
 - Merma y Beneficiaries exponen facades con operaciones minimas (buscar id, marcar donada).
+- Las operaciones de merma y donacion quedan restringidas por `companyId` para usuarios retail.
+- Los usuarios beneficiarios siguen accediendo a la logica de donaciones segun su flujo propio y no usan el mismo ACL de pertenencia por empresa para merma publicada.
 
 ## Modelo de datos (tablas principales)
 
 - `mermas`
-  - id, product_name, category_name, quantity, expiration_date, reason, status, created_at, updated_at
+  - id, product_name, category_name, quantity, expiration_date, reason, status, company_id, created_at, updated_at
 - `donations`
   - id, merma_id, beneficiary_id, donation_quantity, scheduled_delivery_date,
-    delivery_date, reception_date, reception_comment, status, created_at, updated_at
+    delivery_date, reception_date, reception_comment, status, company_id, created_at, updated_at
+- `donation_requests`
+  - id, merma_id, beneficiary_id, status, notes, company_id, created_at, updated_at
 - `beneficiaries`
-  - id, beneficiary_name, type, address, status, created_at, updated_at
+  - id, beneficiary_name, type, address, status, company_id, created_at, updated_at
 - `beneficiary_accepted_products`
   - beneficiary_id, accepted_product
+- `companies`
+  - id, name, headquarters, created_at, updated_at
 - `user_accounts`
-  - id, email, password_hash, role, status, created_at, updated_at
+  - id, email, password_hash, company_id, role, status, created_at, updated_at
 
 Relaciones principales:
 - Donation referencia Merma (merma_id) y Beneficiary (beneficiary_id) como VOs embebidos.
+- DonationRequest references Merma (merma_id) and Beneficiary (beneficiary_id) as embedded value objects.
 - Beneficiary tiene coleccion de productos aceptados.
+- Todas las entidades tienen company_id para multi-tenancy.
 
 ## Base URL y documentacion
 
@@ -184,7 +241,8 @@ MermaReason: `EXPIRATION`, `DAMAGED_PACKAGING`, `OVERSTOCK`
 BeneficiaryStatus: `ACTIVE`, `INACTIVE`
 BeneficiaryType: `SCHOOL`, `SHELTER`, `NGO`
 DonationStatus: `ASSIGNED`, `DELIVERED`, `CONFIRMED`
-UserRole: `RETAIL_MANAGER`, `BENEFICIARY`
+DonationRequestStatus: `PENDING`, `ACCEPTED`, `REJECTED`, `CANCELLED`, `COMPLETED`
+UserRole: `MANAGER` (retail), `BENEFICIARY`
 UserStatus: `ACTIVE`, `INACTIVE`
 
 ## Endpoints (mapa rapido)
@@ -212,10 +270,27 @@ Donaciones:
 - `GET /api/donations/{donationId}`
 - `GET /api/donations?status=ASSIGNED|DELIVERED|CONFIRMED`
 - `GET /api/donations/by-beneficiary/{beneficiaryId}`
+- `GET /api/donations/statistics` (devuelve cantidad de donaciones por beneficiario - manager only)
+
+Donation Requests:
+- `POST /api/requests` (beneficiary creates a request for a donable merma)
+- `GET /api/requests/{requestId}` (gets a request by id)
+- `GET /api/requests?beneficiaryId=X` (lists a beneficiary's requests)
+- `GET /api/requests/merma/{mermaId}` (lists requests for a merma - manager only)
+- `PATCH /api/requests/{requestId}/accept` (manager accepts a request)
+- `PATCH /api/requests/{requestId}/reject` (manager rejects a request)
+- `PATCH /api/requests/{requestId}/cancel` (beneficiary cancels a request)
+- `GET /api/requests/company` (lists requests for the manager's company - manager only)
+- `GET /api/requests/product/{productName}` (lists requests by merma product name - manager only)
 
 IAM:
 - `POST /api/iam/register`
 - `POST /api/iam/login`
+- `GET /api/iam/profile` (devuelve `companyId`, `email`, `role` del usuario autenticado)
+
+Seguridad:
+- Las rutas protegidas requieren `Authorization: Bearer <jwt>`.
+- El JWT contiene `userId`, `email`, `companyId` y `role`.
 
 ## Ejemplos rapidos por contexto
 
@@ -274,15 +349,95 @@ Content-Type: application/json
 }
 ```
 
+Donation Requests (beneficiary claims a donable merma, manager accepts):
+```http
+POST /api/requests
+Content-Type: application/json
+X-User-Id: 2
+
+{
+  "mermaId": 1,
+  "beneficiaryId": 1,
+  "notes": "Necesitamos urgente para los niños"
+}
+```
+Response:
+```json
+{
+  "id": 1,
+  "mermaReferenceId": { "value": 1 },
+  "beneficiaryReferenceId": { "value": 1 },
+  "status": "PENDING",
+  "notes": "Necesitamos urgente para los niños",
+  "companyId": { "value": 1 }
+}
+```
+
+Manager accepts the request:
+```http
+PATCH /api/requests/1/accept
+X-User-Id: 1
+```
+
+Manager rejects the request:
+```http
+PATCH /api/requests/1/reject
+X-User-Id: 1
+```
+
+Beneficiary cancels the request:
+```http
+PATCH /api/requests/1/cancel
+X-User-Id: 2
+```
+
 IAM (registro y login):
 ```http
 POST /api/iam/register
 Content-Type: application/json
 
+Donation statistics (manager views donations by beneficiary):
+```http
+GET /api/donations/statistics
+Authorization: Bearer <token>
+X-User-Id: 1
+```
+Response:
+```json
+[
+  {
+    "beneficiaryId": 1,
+    "beneficiaryName": "Colegio San Juan",
+    "totalDonations": 5,
+    "totalQuantityDonated": 50
+  },
+  {
+    "beneficiaryId": 2,
+    "beneficiaryName": "Albergue Maria",
+    "totalDonations": 3,
+    "totalQuantityDonated": 25
+  }
+]
+```
+
+Requests by company (manager sees all company requests):
+```http
+GET /api/requests/company
+Authorization: Bearer <token>
+X-User-Id: 1
+```
+
+Requests by product (manager sees requests for a merma product):
+```http
+GET /api/requests/product/Yogurt%20Natural
+Authorization: Bearer <token>
+X-User-Id: 1
+```
 {
   "email": "manager@retail.com",
   "rawPassword": "admin123",
-  "role": "RETAIL_MANAGER"
+  "role": "MANAGER",
+  "companyId": 1
 }
 ```
 ```http
@@ -294,6 +449,52 @@ Content-Type: application/json
   "rawPassword": "admin123"
 }
 ```
+Respuesta de login:
+```json
+{
+  "user": {
+    "id": 1,
+    "email": { "value": "manager@retail.com" },
+    "companyId": { "value": 1 },
+    "role": "MANAGER",
+    "status": "ACTIVE"
+  },
+  "token": "eyJhbGciOiJIUzI1NiJ9..."
+}
+```
+
+Profile endpoint (usuario autenticado)
+------------------------------------
+
+Obtén la información del usuario autenticado (companyId, email, role).
+
+Request:
+
+```http
+GET /api/iam/profile
+Authorization: Bearer <token>
+```
+
+Response (200):
+
+```json
+{
+  "companyId": 1,
+  "email": "manager@retail.com",
+  "role": "MANAGER"
+}
+```
+
+Ejemplo cURL:
+
+```bash
+curl -X GET http://localhost:8080/api/iam/profile \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
+```
+
+Notas:
+- El endpoint requiere autenticación; usa el token devuelto por `/api/iam/login`.
+- Si el usuario no tiene `companyId` (por ejemplo, un beneficiario), el valor puede ser `null`.
 
 ## Ejemplos cURL (flujo completo)
 
@@ -362,20 +563,20 @@ curl -X PATCH http://localhost:8080/api/donations/1/confirm \
 
 ## Notas de implementacion
 
-- No se usan DTOs ni mappers; los endpoints reciben comandos/queries y retornan agregados.
+- No se usan DTOs ni mappers, salvo la respuesta de autenticacion con token; los endpoints reciben comandos/queries y retornan agregados.
 - Swagger documenta respuestas y errores basicos.
 - Se usa `AuditableAggregateRoot` para `id`, `createdAt`, `updatedAt`.
 - IAM devuelve usuario sin exponer `passwordHash`.
+- El login devuelve `user + token` y el filtro JWT coloca la autenticacion en `SecurityContext`.
 
 ## Limitaciones conocidas
 
-- No hay autenticacion con tokens; solo login/registro.
+- La autenticacion usa JWT basico con clave simetrica de desarrollo.
 - No hay validaciones con anotaciones Bean Validation en records.
 - Manejo de errores usa respuestas por defecto de Spring.
 
 ## Roadmap sugerido
 
-- Agregar JWT y filtros de seguridad.
 - Implementar `@ControllerAdvice` para errores consistentes.
 - Agregar paginacion en listados.
 - Test unitarios para reglas de negocio.
@@ -388,10 +589,11 @@ curl -X PATCH http://localhost:8080/api/donations/1/confirm \
 - Beneficiario: institucion que recibe donaciones (colegio, albergue u ONG).
 - Usuario Retail: encargado/administrador que opera la merma y las donaciones.
 - IAM: identidad y acceso; registro y autenticacion basica.
+- Company: empresa retail a la que se asocian usuarios y datos operativos.
 
 ## Matriz de permisos (conceptual)
 
-- Retail (RETAIL_MANAGER):
+- Retail (MANAGER):
   - Puede registrar merma, clasificar donable/no donable y crear donaciones.
   - Puede registrar/editar beneficiarios y activar/desactivar.
   - Puede ver reportes operativos via endpoints.
@@ -419,6 +621,8 @@ Nota: la seguridad por roles no esta implementada aun (ver Limitaciones).
 - `spring.jpa.hibernate.ddl-auto` estrategia de schema (`update`).
 - `springdoc.api-docs.path` ruta OpenAPI.
 - `springdoc.swagger-ui.path` ruta Swagger UI.
+- `authorization.jwt.secret` clave simetrica para firmar JWT.
+- `authorization.jwt.expiration-milliseconds` duracion del token en milisegundos.
 
 ## Catalogo de requests (todas las operaciones)
 
@@ -488,7 +692,8 @@ IAM:
 {
   "email": "admin@retail.com",
   "rawPassword": "admin123",
-  "role": "RETAIL_MANAGER"
+  "role": "MANAGER",
+  "companyId": 1
 }
 ```
 - Login (`POST /api/iam/login`):

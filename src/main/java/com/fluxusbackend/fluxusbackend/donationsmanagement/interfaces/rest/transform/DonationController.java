@@ -8,12 +8,17 @@ import com.fluxusbackend.fluxusbackend.donationsmanagement.domain.model.enums.Do
 import com.fluxusbackend.fluxusbackend.donationsmanagement.domain.model.queries.GetDonationByIdQuery;
 import com.fluxusbackend.fluxusbackend.donationsmanagement.domain.model.queries.ListDonationsByBeneficiaryQuery;
 import com.fluxusbackend.fluxusbackend.donationsmanagement.domain.model.queries.ListDonationsByStatusQuery;
+import com.fluxusbackend.fluxusbackend.donationsmanagement.domain.model.queries.ListDonationStatisticsQuery;
+import com.fluxusbackend.fluxusbackend.donationsmanagement.interfaces.rest.dto.DonationStatisticDto;
 import com.fluxusbackend.fluxusbackend.donationsmanagement.domain.model.valueobjects.BeneficiaryReferenceId;
 import com.fluxusbackend.fluxusbackend.donationsmanagement.domain.model.valueobjects.DonationId;
 import com.fluxusbackend.fluxusbackend.donationsmanagement.domain.services.DonationCommandService;
 import com.fluxusbackend.fluxusbackend.donationsmanagement.domain.services.DonationQueryService;
 import com.fluxusbackend.fluxusbackend.identityaccessmanagement.application.internal.services.AuthorizationService;
 import com.fluxusbackend.fluxusbackend.identityaccessmanagement.domain.model.enums.UserRole;
+import com.fluxusbackend.fluxusbackend.identityaccessmanagement.domain.services.UserQueryService;
+import com.fluxusbackend.fluxusbackend.identityaccessmanagement.domain.model.queries.GetUserByIdQuery;
+import com.fluxusbackend.fluxusbackend.identityaccessmanagement.domain.model.valueobjects.UserId;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -42,12 +47,14 @@ public class DonationController {
     private final DonationCommandService commandService;
     private final DonationQueryService queryService;
     private final AuthorizationService authorizationService;
+        private final UserQueryService userQueryService;
 
     public DonationController(DonationCommandService commandService, DonationQueryService queryService,
-            AuthorizationService authorizationService) {
+                        AuthorizationService authorizationService, UserQueryService userQueryService) {
         this.commandService = commandService;
         this.queryService = queryService;
         this.authorizationService = authorizationService;
+                this.userQueryService = userQueryService;
     }
 
     @PostMapping("/create")
@@ -146,5 +153,21 @@ public class DonationController {
             @PathVariable Long beneficiaryId) {
         authorizationService.requireRole(userId, UserRole.MANAGER, UserRole.BENEFICIARY);
         return queryService.handle(new ListDonationsByBeneficiaryQuery(new BeneficiaryReferenceId(beneficiaryId)));
+    }
+
+    @GetMapping("/statistics")
+    @Operation(summary = "Get donation statistics for company (manager only)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Statistics retrieved",
+                    content = @Content(schema = @Schema(implementation = DonationStatisticDto.class))),
+            @ApiResponse(responseCode = "403", description = "Access denied", content = @Content)
+    })
+    public List<DonationStatisticDto> getStatistics(
+            @RequestHeader("X-User-Id") Long userId) {
+        authorizationService.requireRole(userId, UserRole.MANAGER);
+        var user = userQueryService.handle(new GetUserByIdQuery(new UserId(userId)))
+                .orElseThrow(() -> new IllegalArgumentException("Unknown user"));
+        var companyId = user.getCompanyId().orElseThrow(() -> new IllegalArgumentException("User has no company"));
+        return queryService.handle(new ListDonationStatisticsQuery(companyId));
     }
 }

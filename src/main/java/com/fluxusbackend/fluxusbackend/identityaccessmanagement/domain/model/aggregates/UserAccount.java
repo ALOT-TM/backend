@@ -7,6 +7,7 @@ import com.fluxusbackend.fluxusbackend.identityaccessmanagement.domain.model.val
 import com.fluxusbackend.fluxusbackend.identityaccessmanagement.domain.model.valueobjects.PasswordHash;
 import com.fluxusbackend.fluxusbackend.identityaccessmanagement.domain.model.valueobjects.UserId;
 import com.fluxusbackend.fluxusbackend.shared.domain.model.aggregates.AuditableAggregateRoot;
+import com.fluxusbackend.fluxusbackend.shared.domain.model.valueobjects.CompanyId;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
@@ -43,6 +44,11 @@ public class UserAccount extends AuditableAggregateRoot {
         this.status = UserStatus.ACTIVE;
     }
 
+    public UserAccount(EmailAddress email, PasswordHash passwordHash, UserRole role, CompanyId companyId) {
+        this(email, passwordHash, role);
+        setCompanyId(companyId);
+    }
+
     public UserId getUserId() {
         return new UserId(getId());
     }
@@ -62,6 +68,10 @@ public class UserAccount extends AuditableAggregateRoot {
 
     public UserStatus getStatus() {
         return status;
+    }
+
+    public java.util.Optional<CompanyId> getCompanyId() {
+        return super.getCompanyId();
     }
 }
 

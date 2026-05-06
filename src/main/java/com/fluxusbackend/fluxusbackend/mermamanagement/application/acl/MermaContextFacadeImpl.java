@@ -27,6 +27,13 @@ public class MermaContextFacadeImpl implements MermaContextFacade {
     }
 
     @Override
+    public Long findCompanyIdByMermaId(Long mermaId) {
+        var query = new GetMermaByIdQuery(new MermaId(mermaId));
+        var merma = mermaQueryService.handle(query);
+        return merma.flatMap(m -> m.getCompanyId().map(cid -> cid.value())).orElse(0L);
+    }
+
+    @Override
     public boolean markMermaDonated(Long mermaId) {
         var query = new GetMermaByIdQuery(new MermaId(mermaId));
         var merma = mermaQueryService.handle(query);

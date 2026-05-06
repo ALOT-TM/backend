@@ -28,7 +28,7 @@ public class UserCommandServiceImpl implements UserCommandService {
             throw new NoSuchElementException("Email already registered");
         }
         var hash = new PasswordHash(passwordEncoder.encode(command.rawPassword()));
-        var user = new UserAccount(command.email(), hash, command.role());
+        var user = new UserAccount(command.email(), hash, command.role(), command.companyId());
         return repository.save(user);
     }
 }
