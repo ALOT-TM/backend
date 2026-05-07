@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.beans.factory.annotation.Autowired;
 
 @Service
 public class DonationQueryServiceImpl implements DonationQueryService {
@@ -20,11 +21,7 @@ public class DonationQueryServiceImpl implements DonationQueryService {
     private final DonationRepository repository;
     private final BeneficiariesContextFacade beneficiariesContextFacade;
 
-    public DonationQueryServiceImpl(DonationRepository repository) {
-        this.repository = repository;
-        this.beneficiariesContextFacade = null;
-    }
-
+    @Autowired
     public DonationQueryServiceImpl(DonationRepository repository, BeneficiariesContextFacade beneficiariesContextFacade) {
         this.repository = repository;
         this.beneficiariesContextFacade = beneficiariesContextFacade;

@@ -69,15 +69,22 @@ Flujo principal:
 
 Este repositorio está en un estado funcional y compilable. Cambios principales implementados y activos en el códigobase:
 
-- Autenticación vía JWT usando `JwtTokenService` y `JwtAuthenticationFilter` (token HMAC). Login emite un JWT que contiene `userId`, `email`, `companyId` y `role`.
-- `AuthenticatedUserPrincipal` y `CurrentUserProvider` exponen el usuario actual desde `SecurityContext` para ACLs y servicios.
-- `CompanyId` agregado como Value Object embebido en `AuditableAggregateRoot` y en `UserAccount`.
-- `Company` aggregate creado para representar empresas retail.
-- ACLs aplicadas para asegurar que usuarios con rol `MANAGER` sólo gestionen datos de su `companyId` en contextos como Merma y Donations.
-- Endpoint adicional `GET /api/iam/profile` expone el perfil del usuario autenticado (companyId, email, role).
+- **Autenticación JWT**: `JwtTokenService` y `JwtAuthenticationFilter` con HMAC-SHA256. Login emite JWT con `userId`, `email`, `companyId` y `role`.
+- **Swagger UI con JWT**: `OpenApiConfig` configura autenticación Bearer en Swagger (candado 🔒 en endpoints protegidos).
+- **Sin formulario de login**: `SecurityConfig` deshabilita form login y HTTP Basic. Solo API REST.
+- **Seguridad stateless**: `SessionCreationPolicy.STATELESS` + JWT validation en cada request.
+- **Multi-tenancy**: `CompanyId` embebido en todas las entidades. ACL filtra datos por `companyId`.
+- **MySQL persistencia**: Base de datos `fluxus` con auto-creación de esquema. DDL mode `update`.
+- `AuthenticatedUserPrincipal` y `CurrentUserProvider` exponen usuario desde `SecurityContext`.
+- `Company` aggregate para representar empresas retail.
+- Endpoint `GET /api/iam/profile` expone perfil del usuario autenticado.
+- **Nuevos endpoints**:
+  - `GET /api/donations/statistics` - Estadísticas de donaciones por beneficiario (manager only)
+  - `GET /api/requests/company` - Listado de requests de la compañía (manager only)
+  - `GET /api/requests/product/{productName}` - Filtrar requests por nombre de producto (manager only)
 - El proyecto compila correctamente con `mvn -DskipTests package`.
 
-Estos cambios buscan soportar multi-tenancy por `companyId`, separación de contextos y autenticación segura para APIs.
+Estos cambios soportan multi-tenancy segura, autenticación JWT, y documentación interactiva sin exposición de un login HTML.
 
 ## Arquitectura y capas
 
@@ -232,7 +239,93 @@ Relaciones principales:
 
 Base (por defecto): `http://localhost:8080`
 - `GET /api-docs` OpenAPI JSON
-- `GET /swagger-ui.html` Swagger UI
+- `GET /swagger-ui.html` Swagger UI (sin formulario de login, autenticación por JWT token)
+
+## Configuración y Setup
+
+### Base de datos - MySQL
+
+La aplicación usa **MySQL 8.x** para persistencia. Configuración en `src/main/resources/application.properties`:
+
+```properties
+spring.datasource.url=jdbc:mysql://localhost:3306/fluxus?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC
+spring.datasource.username=root
+spring.datasource.password=@Mysequelroot1
+```
+
+- **URL**: `localhost:3306` (cambiar si MySQL está en otro host/puerto)
+- **BD**: `fluxus` (se crea automáticamente si no existe)
+- **Usuario/Contraseña**: cambiar según tu configuración de MySQL
+- **DDL**: `ddl-auto=update` (crea/actualiza tablas automáticamente)
+
+**Requisitos previos:**
+1. MySQL debe estar corriendo en la máquina
+2. El usuario y contraseña deben ser válidos
+3. La BD `fluxus` se creará automáticamente al iniciar la app
+
+### Ejecución local
+
+```powershell
+# 1. Compilar
+mvn clean package -DskipTests
+
+# 2. Ejecutar desde VS Code
+# Abrir FluxusBackendApplication.java y usar "Run" (F5)
+
+# O ejecutar manualmente
+java -jar target/FluxusBackend-0.0.1-SNAPSHOT.jar
+```
+
+La app escuchará en `http://localhost:8080`
+
+### Autenticación y Swagger UI
+
+La app **no tiene formulario de login** en la web. La autenticación es **JWT basada en API**:
+
+1. **Registrar usuario** (sin auth requerida):
+   ```bash
+   curl -X POST http://localhost:8080/api/iam/register \
+     -H "Content-Type: application/json" \
+     -d '{
+       "email": "user@test.com",
+       "rawPassword": "pass123",
+       "role": "MANAGER",
+       "companyId": 1
+     }'
+   ```
+
+2. **Hacer login** (obtener JWT token):
+   ```bash
+   curl -X POST http://localhost:8080/api/iam/login \
+     -H "Content-Type: application/json" \
+     -d '{"email": "user@test.com", "rawPassword": "pass123"}'
+   ```
+   
+   Respuesta:
+   ```json
+   {
+     "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+   }
+   ```
+
+3. **Usar Swagger UI** (`http://localhost:8080/swagger-ui.html`):
+   - Click en botón **Authorize** (candado)
+   - Pega el token JWT completo (sin "Bearer")
+   - Ya puedes usar los endpoints protegidos
+
+4. **Usar en requests manuales**:
+   ```bash
+   curl -H "Authorization: Bearer <token>" \
+        http://localhost:8080/api/iam/profile
+   ```
+
+### Seguridad
+
+- **Login form deshabilitado**: `@Configuration(proxyBeanMethods=false)` + `.formLogin(form -> form.disable())`
+- **HTTP Basic deshabilitado**: `.httpBasic(basic -> basic.disable())`
+- **JWT required**: todos los endpoints excepto `/api/iam/register`, `/api/iam/login` y Swagger docs
+- **Session stateless**: `SessionCreationPolicy.STATELESS`
+- **CORS enabled**: permite `http://localhost:5173` (configurado en `WebConfig`)
 
 ## Estados y enums
 
