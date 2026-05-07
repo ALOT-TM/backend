@@ -78,6 +78,10 @@ Este repositorio está en un estado funcional y compilable. Cambios principales 
 - `AuthenticatedUserPrincipal` y `CurrentUserProvider` exponen usuario desde `SecurityContext`.
 - `Company` aggregate para representar empresas retail.
 - Endpoint `GET /api/iam/profile` expone perfil del usuario autenticado.
+- **Company endpoints públicos** (sin JWT):
+  - `POST /api/companies` - Crear compañía
+  - `GET /api/companies` - Listar compañías
+  - `GET /api/companies/{companyId}` - Obtener compañía por id
 - **Nuevos endpoints**:
   - `GET /api/donations/statistics` - Estadísticas de donaciones por beneficiario (manager only)
   - `GET /api/requests/company` - Listado de requests de la compañía (manager only)
@@ -142,7 +146,7 @@ Reglas clave:
 - Al confirmar recepcion se marca la merma como `DONATED` via ACL.
 
 ### Donation Requests (within Donations Management)
-Responsibility: allow beneficiaries to claim donable mermas and notify the retail manager.
+Responsabilidad: permitir que los beneficiarios reclamen mermas donables y notificar al manager de retail.
 
 - Aggregate Root: `DonationRequest`
 - Value Objects: `DonationRequestId`, `MermaReferenceId`, `BeneficiaryReferenceId`
@@ -153,12 +157,12 @@ Responsibility: allow beneficiaries to claim donable mermas and notify the retai
 - Services: `DonationRequestCommandService`, `DonationRequestQueryService`
 - Endpoint: `/api/requests`
 
-Rules:
-- A request starts in `PENDING`.
-- A manager can `ACCEPT` or `REJECT` a request.
-- A beneficiary can `CANCEL` a request if it is `PENDING` or `ACCEPTED`.
-- A request is marked `COMPLETED` once it reaches that state after being accepted.
-- A donable merma can have multiple requests from different beneficiaries.
+Reglas:
+- Una solicitud comienza en `PENDING`.
+- Un manager puede `ACCEPT` o `REJECT` una solicitud.
+- Un beneficiario puede `CANCEL` una solicitud si está en `PENDING` o `ACCEPTED`.
+- Una solicitud se marca como `COMPLETED` una vez alcanza ese estado luego de ser aceptada.
+- Una merma donable puede tener múltiples solicitudes de diferentes beneficiarios.
 
 ### Beneficiaries Management
 Responsabilidad: administrar instituciones beneficiarias y su disponibilidad.
@@ -191,6 +195,8 @@ Responsabilidad: registro y autenticacion de usuarios internos y beneficiarios.
 
 Reglas clave:
 - Registro requiere email valido y password >= 6.
+- Si `role=MANAGER`, `companyId` es obligatorio.
+- Si `role=BENEFICIARY`, `companyId` debe ser `null` (o campo omitido).
 - Login valida credenciales (hash con BCrypt) y emite JWT con `userId`, `email`, `companyId` y `role`.
 
 ### Company Management
@@ -294,6 +300,18 @@ La app **no tiene formulario de login** en la web. La autenticación es **JWT ba
      }'
    ```
 
+   Beneficiario (sin compañia):
+   ```bash
+   curl -X POST http://localhost:8080/api/iam/register \
+     -H "Content-Type: application/json" \
+     -d '{
+       "email": "beneficiary@test.com",
+       "rawPassword": "pass123",
+       "role": "BENEFICIARY",
+       "companyId": null
+     }'
+   ```
+
 2. **Hacer login** (obtener JWT token):
    ```bash
    curl -X POST http://localhost:8080/api/iam/login \
@@ -323,7 +341,7 @@ La app **no tiene formulario de login** en la web. La autenticación es **JWT ba
 
 - **Login form deshabilitado**: `@Configuration(proxyBeanMethods=false)` + `.formLogin(form -> form.disable())`
 - **HTTP Basic deshabilitado**: `.httpBasic(basic -> basic.disable())`
-- **JWT required**: todos los endpoints excepto `/api/iam/register`, `/api/iam/login` y Swagger docs
+- **JWT required**: todos los endpoints excepto `/api/iam/register`, `/api/iam/login`, `/api/companies/**` y Swagger docs
 - **Session stateless**: `SessionCreationPolicy.STATELESS`
 - **CORS enabled**: permite `http://localhost:5173` (configurado en `WebConfig`)
 
@@ -376,6 +394,11 @@ Donation Requests:
 - `GET /api/requests/company` (lists requests for the manager's company - manager only)
 - `GET /api/requests/product/{productName}` (lists requests by merma product name - manager only)
 
+Companies (public, no JWT):
+- `POST /api/companies`
+- `GET /api/companies`
+- `GET /api/companies/{companyId}`
+
 IAM:
 - `POST /api/iam/register`
 - `POST /api/iam/login`
@@ -384,6 +407,7 @@ IAM:
 Seguridad:
 - Las rutas protegidas requieren `Authorization: Bearer <jwt>`.
 - El JWT contiene `userId`, `email`, `companyId` y `role`.
+- Las rutas `/api/companies/**` son publicas y no requieren token.
 
 ## Ejemplos rapidos por contexto
 
@@ -446,7 +470,7 @@ Donation Requests (beneficiary claims a donable merma, manager accepts):
 ```http
 POST /api/requests
 Content-Type: application/json
-X-User-Id: 2
+Authorization: Bearer <token>
 
 {
   "mermaId": 1,
@@ -469,31 +493,36 @@ Response:
 Manager accepts the request:
 ```http
 PATCH /api/requests/1/accept
-X-User-Id: 1
+Authorization: Bearer <token>
 ```
 
 Manager rejects the request:
 ```http
 PATCH /api/requests/1/reject
-X-User-Id: 1
+Authorization: Bearer <token>
 ```
 
 Beneficiary cancels the request:
 ```http
 PATCH /api/requests/1/cancel
-X-User-Id: 2
+Authorization: Bearer <token>
 ```
 
-IAM (registro y login):
+Company (crear sin login):
 ```http
-POST /api/iam/register
+POST /api/companies
 Content-Type: application/json
+
+{
+  "name": "Retail Norte SAC",
+  "headquarters": "Lima"
+}
+```
 
 Donation statistics (manager views donations by beneficiary):
 ```http
 GET /api/donations/statistics
 Authorization: Bearer <token>
-X-User-Id: 1
 ```
 Response:
 ```json
@@ -517,15 +546,18 @@ Requests by company (manager sees all company requests):
 ```http
 GET /api/requests/company
 Authorization: Bearer <token>
-X-User-Id: 1
 ```
 
 Requests by product (manager sees requests for a merma product):
 ```http
 GET /api/requests/product/Yogurt%20Natural
 Authorization: Bearer <token>
-X-User-Id: 1
 ```
+IAM (registro y login):
+```http
+POST /api/iam/register
+Content-Type: application/json
+
 {
   "email": "manager@retail.com",
   "rawPassword": "admin123",
@@ -533,6 +565,19 @@ X-User-Id: 1
   "companyId": 1
 }
 ```
+
+```http
+POST /api/iam/register
+Content-Type: application/json
+
+{
+  "email": "beneficiary@ngo.org",
+  "rawPassword": "benef123",
+  "role": "BENEFICIARY",
+  "companyId": null
+}
+```
+
 ```http
 POST /api/iam/login
 Content-Type: application/json
@@ -556,10 +601,10 @@ Respuesta de login:
 }
 ```
 
-Profile endpoint (usuario autenticado)
+Endpoint de perfil (usuario autenticado)
 ------------------------------------
 
-Obtén la información del usuario autenticado (companyId, email, role).
+Obtén la información del usuario autenticado (`companyId`, `email`, `role`).
 
 Request:
 
@@ -584,6 +629,26 @@ Ejemplo cURL:
 curl -X GET http://localhost:8080/api/iam/profile \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
 ```
+## Endpoints de usuario (IAM)
+
+Se agregaron endpoints para consultar cuentas de usuario y listas filtradas por rol. Estos endpoints requieren un token JWT válido en el header `Authorization: Bearer <token>`, pero no validan *quién* realiza la consulta — cualquier usuario autenticado puede leerlos.
+
+- `GET /api/iam/users/{userId}` — Devuelve la cuenta solicitada. Respuesta segura (`UserAccountDto`) con campos: `id`, `email`, `companyId` (nullable), `role`, `status`. Bajo ningún concepto se devuelve `passwordHash`.
+- `GET /api/iam/users?role=MANAGER|BENEFICIARY` — Lista usuarios filtrados por rol. Si no se especifica `role` devuelve todos los usuarios (respuesta: array de `UserAccountDto`).
+
+Ejemplos:
+
+```bash
+curl -X GET http://localhost:8080/api/iam/users/1 \
+  -H "Authorization: Bearer <token>"
+```
+
+```bash
+curl -X GET "http://localhost:8080/api/iam/users?role=BENEFICIARY" \
+  -H "Authorization: Bearer <token>"
+```
+
+Nota: la implementación usa DTOs para evitar exponer `passwordHash` accidentalmente desde la entidad JPA.
 
 Notas:
 - El endpoint requiere autenticación; usa el token devuelto por `/api/iam/login`.
@@ -781,12 +846,23 @@ Donaciones:
 
 IAM:
 - Register (`POST /api/iam/register`):
+  - `MANAGER`: `companyId` obligatorio.
+  - `BENEFICIARY`: `companyId` debe ser `null` o omitido.
 ```json
 {
   "email": "admin@retail.com",
   "rawPassword": "admin123",
   "role": "MANAGER",
   "companyId": 1
+}
+```
+
+```json
+{
+  "email": "beneficiary@ngo.org",
+  "rawPassword": "benef123",
+  "role": "BENEFICIARY",
+  "companyId": null
 }
 ```
 - Login (`POST /api/iam/login`):
@@ -796,6 +872,17 @@ IAM:
   "rawPassword": "admin123"
 }
 ```
+
+Companies (public, no JWT):
+- Create (`POST /api/companies`):
+```json
+{
+  "name": "Retail Norte SAC",
+  "headquarters": "Lima"
+}
+```
+- List (`GET /api/companies`): sin body.
+- Get by id (`GET /api/companies/{companyId}`): sin body.
 
 ## Supuestos del proyecto
 

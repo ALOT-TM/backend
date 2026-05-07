@@ -1,11 +1,16 @@
 package com.fluxusbackend.fluxusbackend.identityaccessmanagement.interfaces.rest.transform;
 
 import com.fluxusbackend.fluxusbackend.identityaccessmanagement.domain.model.aggregates.UserAccount;
+import com.fluxusbackend.fluxusbackend.identityaccessmanagement.domain.model.dto.UserAccountDto;
 import com.fluxusbackend.fluxusbackend.identityaccessmanagement.domain.model.dto.AuthenticatedUser;
 import com.fluxusbackend.fluxusbackend.identityaccessmanagement.domain.model.commands.RegisterUserCommand;
 import com.fluxusbackend.fluxusbackend.identityaccessmanagement.domain.model.queries.LoginUserQuery;
 import com.fluxusbackend.fluxusbackend.identityaccessmanagement.domain.services.UserAuthenticationQueryService;
 import com.fluxusbackend.fluxusbackend.identityaccessmanagement.domain.services.UserCommandService;
+import com.fluxusbackend.fluxusbackend.identityaccessmanagement.domain.services.UserQueryService;
+import com.fluxusbackend.fluxusbackend.identityaccessmanagement.domain.model.queries.GetUserByIdQuery;
+import com.fluxusbackend.fluxusbackend.identityaccessmanagement.domain.model.queries.ListUsersByRoleQuery;
+import com.fluxusbackend.fluxusbackend.identityaccessmanagement.domain.model.valueobjects.UserId;
 import com.fluxusbackend.fluxusbackend.shared.application.security.JwtTokenService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -14,6 +19,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import com.fluxusbackend.fluxusbackend.identityaccessmanagement.domain.model.dto.Profile;
@@ -33,16 +39,19 @@ public class IamController {
 
     private final UserCommandService userCommandService;
     private final UserAuthenticationQueryService userAuthenticationQueryService;
-        private final JwtTokenService jwtTokenService;
+                private final JwtTokenService jwtTokenService;
+        private final UserQueryService userQueryService;
 
     public IamController(
             UserCommandService userCommandService,
                         UserAuthenticationQueryService userAuthenticationQueryService,
-                        JwtTokenService jwtTokenService
+                        JwtTokenService jwtTokenService,
+                        UserQueryService userQueryService
     ) {
         this.userCommandService = userCommandService;
         this.userAuthenticationQueryService = userAuthenticationQueryService;
                 this.jwtTokenService = jwtTokenService;
+        this.userQueryService = userQueryService;
     }
 
     @PostMapping("/register")
@@ -79,6 +88,29 @@ public class IamController {
                 var companyId = principal.companyId();
                 Long companyLong = companyId == null ? null : companyId.value();
                 return new Profile(companyLong, principal.email(), principal.role().name());
+        }
+
+        @GetMapping("/users/{userId}")
+        @Operation(summary = "Get user account by id (no caller validation)")
+        public UserAccountDto getUserById(@PathVariable Long userId) {
+                var user = userQueryService.handle(new GetUserByIdQuery(new UserId(userId)))
+                                        .orElseThrow(() -> new IllegalArgumentException("User not found"));
+                return UserAccountDto.from(user);
+        }
+
+        @GetMapping("/users")
+        @Operation(summary = "List users, optionally filtered by role")
+            public java.util.List<UserAccountDto> listUsers(@org.springframework.web.bind.annotation.RequestParam(required = false) String role) {
+                        java.util.List<UserAccount> users;
+                        if (role == null || role.isBlank()) {
+                                users = userQueryService.findAll();
+                        } else {
+                                var parsed = com.fluxusbackend.fluxusbackend.identityaccessmanagement.domain.model.enums.UserRole.valueOf(role);
+                                users = userQueryService.handle(new ListUsersByRoleQuery(parsed));
+                        }
+                        var dtos = new java.util.ArrayList<UserAccountDto>();
+                        for (var u : users) dtos.add(UserAccountDto.from(u));
+                        return dtos;
         }
 }
 

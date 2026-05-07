@@ -15,9 +15,7 @@ import com.fluxusbackend.fluxusbackend.donationsmanagement.domain.model.valueobj
 import com.fluxusbackend.fluxusbackend.donationsmanagement.domain.services.DonationRequestCommandService;
 import com.fluxusbackend.fluxusbackend.donationsmanagement.domain.services.DonationRequestQueryService;
 import com.fluxusbackend.fluxusbackend.identityaccessmanagement.domain.model.enums.UserRole;
-import com.fluxusbackend.fluxusbackend.identityaccessmanagement.domain.services.UserQueryService;
-import com.fluxusbackend.fluxusbackend.identityaccessmanagement.domain.model.queries.GetUserByIdQuery;
-import com.fluxusbackend.fluxusbackend.identityaccessmanagement.domain.model.valueobjects.UserId;
+import com.fluxusbackend.fluxusbackend.identityaccessmanagement.application.internal.services.AuthorizationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -32,12 +30,10 @@ import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-import com.fluxusbackend.fluxusbackend.identityaccessmanagement.application.internal.services.AuthorizationService;
 
 @RestController
 @RequestMapping("/api/requests")
@@ -47,18 +43,15 @@ public class DonationRequestController {
     private final DonationRequestCommandService commandService;
     private final DonationRequestQueryService queryService;
     private final AuthorizationService authorizationService;
-    private final UserQueryService userQueryService;
 
     public DonationRequestController(
             DonationRequestCommandService commandService,
             DonationRequestQueryService queryService,
-            AuthorizationService authorizationService,
-            UserQueryService userQueryService
+            AuthorizationService authorizationService
     ) {
         this.commandService = commandService;
         this.queryService = queryService;
         this.authorizationService = authorizationService;
-        this.userQueryService = userQueryService;
     }
 
     @PostMapping
@@ -69,75 +62,58 @@ public class DonationRequestController {
                     content = @Content(schema = @Schema(implementation = DonationRequest.class))),
             @ApiResponse(responseCode = "403", description = "Access denied", content = @Content)
     })
-    public DonationRequest create(
-            @RequestHeader("X-User-Id") Long userId,
-            @Valid @RequestBody CreateDonationRequestCommand command) {
-        authorizationService.requireRole(userId, UserRole.BENEFICIARY);
+    public DonationRequest create(@Valid @RequestBody CreateDonationRequestCommand command) {
+        authorizationService.requireRole(UserRole.BENEFICIARY);
         return commandService.handle(command);
     }
 
     @GetMapping("/{requestId}")
     @Operation(summary = "Get donation request by id")
-    public DonationRequest getById(
-            @RequestHeader("X-User-Id") Long userId,
-            @PathVariable Long requestId) {
+    public DonationRequest getById(@PathVariable Long requestId) {
         return queryService.handle(new GetDonationRequestByIdQuery(new DonationRequestId(requestId)))
                 .orElseThrow(() -> new IllegalArgumentException("Donation request not found"));
     }
 
     @GetMapping
     @Operation(summary = "List donation requests by beneficiary")
-    public List<DonationRequest> listByBeneficiary(
-            @RequestHeader("X-User-Id") Long userId,
-            @RequestParam Long beneficiaryId) {
-        authorizationService.requireRole(userId, UserRole.BENEFICIARY);
+    public List<DonationRequest> listByBeneficiary(@RequestParam Long beneficiaryId) {
+        authorizationService.requireRole(UserRole.BENEFICIARY);
         return queryService.handle(new ListDonationRequestsByBeneficiaryQuery(new BeneficiaryReferenceId(beneficiaryId)));
     }
 
-        @GetMapping("/merma/{mermaId}")
-        @Operation(summary = "List donation requests for a merma (manager only)")
-    public List<DonationRequest> listByMerma(
-            @RequestHeader("X-User-Id") Long userId,
-            @PathVariable Long mermaId) {
-        authorizationService.requireRole(userId, UserRole.MANAGER);
+    @GetMapping("/merma/{mermaId}")
+    @Operation(summary = "List donation requests for a merma (manager only)")
+    public List<DonationRequest> listByMerma(@PathVariable Long mermaId) {
+        authorizationService.requireRole(UserRole.MANAGER);
         return queryService.handle(new ListDonationRequestsByMermaQuery(new com.fluxusbackend.fluxusbackend.donationsmanagement.domain.model.valueobjects.MermaReferenceId(mermaId)));
     }
 
-        @PatchMapping("/{requestId}/accept")
-        @Operation(summary = "Accept donation request (manager only)")
-    public DonationRequest accept(
-            @RequestHeader("X-User-Id") Long userId,
-                        @PathVariable Long requestId) {
-        authorizationService.requireRole(userId, UserRole.MANAGER);
-                return commandService.handle(new AcceptDonationRequestCommand(new DonationRequestId(requestId)));
+    @PatchMapping("/{requestId}/accept")
+    @Operation(summary = "Accept donation request (manager only)")
+    public DonationRequest accept(@PathVariable Long requestId) {
+        authorizationService.requireRole(UserRole.MANAGER);
+        return commandService.handle(new AcceptDonationRequestCommand(new DonationRequestId(requestId)));
     }
 
-        @PatchMapping("/{requestId}/reject")
-        @Operation(summary = "Reject donation request (manager only)")
-    public DonationRequest reject(
-            @RequestHeader("X-User-Id") Long userId,
-                        @PathVariable Long requestId) {
-        authorizationService.requireRole(userId, UserRole.MANAGER);
-                return commandService.handle(new RejectDonationRequestCommand(new DonationRequestId(requestId)));
+    @PatchMapping("/{requestId}/reject")
+    @Operation(summary = "Reject donation request (manager only)")
+    public DonationRequest reject(@PathVariable Long requestId) {
+        authorizationService.requireRole(UserRole.MANAGER);
+        return commandService.handle(new RejectDonationRequestCommand(new DonationRequestId(requestId)));
     }
 
-        @PatchMapping("/{requestId}/cancel")
-        @Operation(summary = "Cancel donation request (beneficiary only)")
-    public DonationRequest cancel(
-            @RequestHeader("X-User-Id") Long userId,
-                        @PathVariable Long requestId) {
-        authorizationService.requireRole(userId, UserRole.BENEFICIARY);
-                return commandService.handle(new CancelDonationRequestCommand(new DonationRequestId(requestId)));
+    @PatchMapping("/{requestId}/cancel")
+    @Operation(summary = "Cancel donation request (beneficiary only)")
+    public DonationRequest cancel(@PathVariable Long requestId) {
+        authorizationService.requireRole(UserRole.BENEFICIARY);
+        return commandService.handle(new CancelDonationRequestCommand(new DonationRequestId(requestId)));
     }
 
     @GetMapping("/company")
-        @Operation(summary = "List donation requests for manager's company")
-    public List<DonationRequest> listByCompany(
-            @RequestHeader("X-User-Id") Long userId) {
-        authorizationService.requireRole(userId, UserRole.MANAGER);
-        var user = userQueryService.handle(new GetUserByIdQuery(new UserId(userId)))
-                .orElseThrow(() -> new IllegalArgumentException("Unknown user"));
-        var companyId = user.getCompanyId().orElseThrow(() -> new IllegalArgumentException("User has no company"));
+    @Operation(summary = "List donation requests for manager's company")
+    public List<DonationRequest> listByCompany() {
+        authorizationService.requireRole(UserRole.MANAGER);
+        var companyId = authorizationService.getCurrentUserCompanyId();
         return queryService.handle(new ListDonationRequestsByCompanyQuery(companyId));
     }
 
@@ -148,10 +124,8 @@ public class DonationRequestController {
                     content = @Content(schema = @Schema(implementation = DonationRequest.class))),
             @ApiResponse(responseCode = "403", description = "Access denied", content = @Content)
     })
-    public List<DonationRequest> listByProductName(
-            @RequestHeader("X-User-Id") Long userId,
-            @PathVariable String productName) {
-        authorizationService.requireRole(userId, UserRole.MANAGER);
+    public List<DonationRequest> listByProductName(@PathVariable String productName) {
+        authorizationService.requireRole(UserRole.MANAGER);
         return queryService.handle(new ListDonationRequestsByProductNameQuery(productName));
     }
 }

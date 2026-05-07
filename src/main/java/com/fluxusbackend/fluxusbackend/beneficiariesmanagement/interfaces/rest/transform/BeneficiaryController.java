@@ -28,7 +28,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -59,10 +58,8 @@ public class BeneficiaryController {
             @ApiResponse(responseCode = "400", description = "Invalid input", content = @Content),
             @ApiResponse(responseCode = "403", description = "Access denied", content = @Content)
     })
-    public Beneficiary register(
-            @RequestHeader("X-User-Id") Long userId,
-            @Valid @RequestBody RegisterBeneficiaryCommand command) {
-        authorizationService.requireRole(userId, UserRole.MANAGER);
+    public Beneficiary register(@Valid @RequestBody RegisterBeneficiaryCommand command) {
+        authorizationService.requireRole(UserRole.MANAGER);
         return commandService.handle(command);
     }
 
@@ -75,10 +72,9 @@ public class BeneficiaryController {
             @ApiResponse(responseCode = "403", description = "Access denied", content = @Content)
     })
     public Beneficiary update(
-            @RequestHeader("X-User-Id") Long userId,
             @PathVariable Long beneficiaryId,
             @Valid @RequestBody UpdateBeneficiaryInfoCommand command) {
-        authorizationService.requireRole(userId, UserRole.MANAGER);
+        authorizationService.requireRole(UserRole.MANAGER);
         var normalized = new UpdateBeneficiaryInfoCommand(
                 new BeneficiaryId(beneficiaryId),
                 command.name(),
@@ -97,10 +93,8 @@ public class BeneficiaryController {
             @ApiResponse(responseCode = "404", description = "Beneficiary not found", content = @Content),
             @ApiResponse(responseCode = "403", description = "Access denied", content = @Content)
     })
-    public Beneficiary activate(
-            @RequestHeader("X-User-Id") Long userId,
-            @PathVariable Long beneficiaryId) {
-        authorizationService.requireRole(userId, UserRole.MANAGER);
+    public Beneficiary activate(@PathVariable Long beneficiaryId) {
+        authorizationService.requireRole(UserRole.MANAGER);
         return commandService.handle(new ActivateBeneficiaryCommand(new BeneficiaryId(beneficiaryId)));
     }
 
@@ -112,10 +106,8 @@ public class BeneficiaryController {
             @ApiResponse(responseCode = "404", description = "Beneficiary not found", content = @Content),
             @ApiResponse(responseCode = "403", description = "Access denied", content = @Content)
     })
-    public Beneficiary deactivate(
-            @RequestHeader("X-User-Id") Long userId,
-            @PathVariable Long beneficiaryId) {
-        authorizationService.requireRole(userId, UserRole.MANAGER);
+    public Beneficiary deactivate(@PathVariable Long beneficiaryId) {
+        authorizationService.requireRole(UserRole.MANAGER);
         return commandService.handle(new DeactivateBeneficiaryCommand(new BeneficiaryId(beneficiaryId)));
     }
 
@@ -127,10 +119,8 @@ public class BeneficiaryController {
             @ApiResponse(responseCode = "404", description = "Beneficiary not found", content = @Content),
             @ApiResponse(responseCode = "403", description = "Access denied", content = @Content)
     })
-    public Beneficiary getById(
-            @RequestHeader("X-User-Id") Long userId,
-            @PathVariable Long beneficiaryId) {
-        authorizationService.requireRole(userId, UserRole.MANAGER);
+    public Beneficiary getById(@PathVariable Long beneficiaryId) {
+        authorizationService.requireRole(UserRole.MANAGER);
         return queryService.handle(new GetBeneficiaryByIdQuery(new BeneficiaryId(beneficiaryId)))
                 .orElseThrow(() -> new IllegalArgumentException("Beneficiary not found"));
     }
@@ -142,10 +132,8 @@ public class BeneficiaryController {
                     content = @Content(schema = @Schema(implementation = Beneficiary.class))),
             @ApiResponse(responseCode = "403", description = "Access denied", content = @Content)
     })
-    public List<Beneficiary> listByStatus(
-            @RequestHeader("X-User-Id") Long userId,
-            @RequestParam BeneficiaryStatus status) {
-        authorizationService.requireRole(userId, UserRole.MANAGER);
+    public List<Beneficiary> listByStatus(@RequestParam BeneficiaryStatus status) {
+        authorizationService.requireRole(UserRole.MANAGER);
         return queryService.handle(new ListBeneficiariesByStatusQuery(status));
     }
 }

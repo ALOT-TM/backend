@@ -8,5 +8,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface UserAccountRepository extends JpaRepository<UserAccount, Long> {
     Optional<UserAccount> findByEmailValue(String value);
+    java.util.List<UserAccount> findAllByRole(com.fluxusbackend.fluxusbackend.identityaccessmanagement.domain.model.enums.UserRole role);
 }
 

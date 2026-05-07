@@ -29,5 +29,17 @@ public class UserQueryServiceImpl implements UserQueryService {
     public Optional<UserAccount> handle(GetUserByEmailQuery query) {
         return repository.findByEmailValue(query.email().value());
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.List<UserAccount> handle(com.fluxusbackend.fluxusbackend.identityaccessmanagement.domain.model.queries.ListUsersByRoleQuery query) {
+        return repository.findAllByRole(query.role());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.List<UserAccount> findAll() {
+        return repository.findAll();
+    }
 }
 

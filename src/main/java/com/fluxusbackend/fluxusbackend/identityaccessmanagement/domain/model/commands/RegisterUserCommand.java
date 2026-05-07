@@ -10,9 +10,14 @@ public record RegisterUserCommand(EmailAddress email, String rawPassword, UserRo
         Objects.requireNonNull(email, "Email is required");
         Objects.requireNonNull(rawPassword, "Password is required");
         Objects.requireNonNull(role, "Role is required");
-        Objects.requireNonNull(companyId, "Company id is required");
         if (rawPassword.isBlank() || rawPassword.length() < 6) {
             throw new IllegalArgumentException("Password must be at least 6 characters");
+        }
+        if (role == UserRole.MANAGER && companyId == null) {
+            throw new IllegalArgumentException("Company id is required for MANAGER users");
+        }
+        if (role == UserRole.BENEFICIARY && companyId != null) {
+            throw new IllegalArgumentException("Company id must be null for BENEFICIARY users");
         }
     }
 }
