@@ -126,14 +126,15 @@ public class BeneficiaryController {
     }
 
     @GetMapping
-    @Operation(summary = "List beneficiaries by status")
+    @Operation(summary = "List beneficiaries by status (optional, defaults to ACTIVE)")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Beneficiaries retrieved",
                     content = @Content(schema = @Schema(implementation = Beneficiary.class))),
             @ApiResponse(responseCode = "403", description = "Access denied", content = @Content)
     })
-    public List<Beneficiary> listByStatus(@RequestParam BeneficiaryStatus status) {
+    public List<Beneficiary> listByStatus(@RequestParam(required = false) BeneficiaryStatus status) {
         authorizationService.requireRole(UserRole.MANAGER);
-        return queryService.handle(new ListBeneficiariesByStatusQuery(status));
+        BeneficiaryStatus resolvedStatus = status != null ? status : BeneficiaryStatus.ACTIVE;
+        return queryService.handle(new ListBeneficiariesByStatusQuery(resolvedStatus));
     }
 }

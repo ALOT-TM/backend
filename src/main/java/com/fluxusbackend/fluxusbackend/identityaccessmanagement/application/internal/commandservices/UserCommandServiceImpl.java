@@ -2,6 +2,7 @@ package com.fluxusbackend.fluxusbackend.identityaccessmanagement.application.int
 
 import com.fluxusbackend.fluxusbackend.identityaccessmanagement.domain.model.aggregates.UserAccount;
 import com.fluxusbackend.fluxusbackend.identityaccessmanagement.domain.model.commands.RegisterUserCommand;
+import com.fluxusbackend.fluxusbackend.shared.domain.model.valueobjects.CompanyId;
 import com.fluxusbackend.fluxusbackend.identityaccessmanagement.domain.model.valueobjects.PasswordHash;
 import com.fluxusbackend.fluxusbackend.identityaccessmanagement.domain.services.UserCommandService;
 import com.fluxusbackend.fluxusbackend.identityaccessmanagement.infrastructure.persistence.jpa.repositories.UserAccountRepository;
@@ -28,7 +29,11 @@ public class UserCommandServiceImpl implements UserCommandService {
             throw new NoSuchElementException("Email already registered");
         }
         var hash = new PasswordHash(passwordEncoder.encode(command.rawPassword()));
-        var user = new UserAccount(command.email(), hash, command.role(), command.companyId());
+        CompanyId cid = null;
+        if (command.companyId() != null) {
+            cid = new CompanyId(command.companyId());
+        }
+        var user = new UserAccount(command.email(), hash, command.role(), cid);
         return repository.save(user);
     }
 }

@@ -2,8 +2,6 @@ package com.fluxusbackend.fluxusbackend.config;
 
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
-import io.swagger.v3.oas.models.security.SecurityScheme;
-import io.swagger.v3.oas.models.security.SecurityRequirement;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -16,14 +14,6 @@ public class OpenApiConfig {
                 .info(new Info()
                         .title("Fluxus Backend API")
                         .version("1.0.0")
-                        .description("API REST para gestión de donaciones y mermas"))
-                .addSecurityItem(new SecurityRequirement().addList("Bearer Authentication"))
-                .components(new io.swagger.v3.oas.models.Components()
-                        .addSecuritySchemes("Bearer Authentication",
-                                new SecurityScheme()
-                                        .type(SecurityScheme.Type.HTTP)
-                                        .scheme("bearer")
-                                        .bearerFormat("JWT")
-                                        .description("Ingresa tu token JWT aquí")));
+                        .description("API REST para gestión de donaciones y mermas"));
     }
 }

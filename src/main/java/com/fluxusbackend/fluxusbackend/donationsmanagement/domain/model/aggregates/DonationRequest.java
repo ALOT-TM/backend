@@ -62,6 +62,10 @@ public class DonationRequest extends AuditableAggregateRoot {
         return beneficiaryReferenceId;
     }
 
+    public CompanyId getCompanyId() {
+        return companyId;
+    }
+
     public DonationRequestStatus getStatus() {
         return status;
     }

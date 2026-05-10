@@ -4,13 +4,18 @@ import com.fluxusbackend.fluxusbackend.donationsmanagement.domain.model.aggregat
 import com.fluxusbackend.fluxusbackend.donationsmanagement.domain.model.commands.AcceptDonationRequestCommand;
 import com.fluxusbackend.fluxusbackend.donationsmanagement.domain.model.commands.CancelDonationRequestCommand;
 import com.fluxusbackend.fluxusbackend.donationsmanagement.domain.model.commands.CreateDonationRequestCommand;
+import com.fluxusbackend.fluxusbackend.donationsmanagement.domain.model.commands.CreateDonationCommand;
 import com.fluxusbackend.fluxusbackend.donationsmanagement.domain.model.commands.RejectDonationRequestCommand;
 import com.fluxusbackend.fluxusbackend.donationsmanagement.domain.model.valueobjects.BeneficiaryReferenceId;
+import com.fluxusbackend.fluxusbackend.donationsmanagement.domain.model.valueobjects.DonationQuantity;
 import com.fluxusbackend.fluxusbackend.donationsmanagement.domain.model.valueobjects.MermaReferenceId;
+import com.fluxusbackend.fluxusbackend.donationsmanagement.domain.model.valueobjects.ScheduledDeliveryDate;
+import com.fluxusbackend.fluxusbackend.donationsmanagement.domain.services.DonationCommandService;
 import com.fluxusbackend.fluxusbackend.donationsmanagement.domain.services.DonationRequestCommandService;
 import com.fluxusbackend.fluxusbackend.donationsmanagement.infrastructure.persistence.jpa.repositories.DonationRequestRepository;
 import com.fluxusbackend.fluxusbackend.mermamanagement.domain.model.enums.MermaStatus;
 import com.fluxusbackend.fluxusbackend.mermamanagement.infrastructure.persistence.jpa.repositories.MermaRepository;
+import java.time.LocalDate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,10 +25,12 @@ public class DonationRequestCommandServiceImpl implements DonationRequestCommand
     private final DonationRequestRepository repository;
     private final MermaRepository mermaRepository;
 
-    public DonationRequestCommandServiceImpl(DonationRequestRepository repository, MermaRepository mermaRepository) {
+    public DonationRequestCommandServiceImpl(
+            DonationRequestRepository repository,
+            MermaRepository mermaRepository
+    ) {
         this.repository = repository;
         this.mermaRepository = mermaRepository;
-        
     }
 
     @Override
@@ -80,4 +87,5 @@ public class DonationRequestCommandServiceImpl implements DonationRequestCommand
             mermaRepository.save(merma);
         }
     }
+
 }
