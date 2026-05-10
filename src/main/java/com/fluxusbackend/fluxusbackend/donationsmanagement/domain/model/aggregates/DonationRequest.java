@@ -5,6 +5,7 @@ import com.fluxusbackend.fluxusbackend.donationsmanagement.domain.model.valueobj
 import com.fluxusbackend.fluxusbackend.donationsmanagement.domain.model.valueobjects.MermaReferenceId;
 import com.fluxusbackend.fluxusbackend.donationsmanagement.domain.model.valueobjects.DonationRequestId;
 import com.fluxusbackend.fluxusbackend.shared.domain.model.aggregates.AuditableAggregateRoot;
+import com.fluxusbackend.fluxusbackend.shared.domain.model.valueobjects.CompanyId;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
@@ -23,6 +24,9 @@ public class DonationRequest extends AuditableAggregateRoot {
     @Embedded
     private BeneficiaryReferenceId beneficiaryReferenceId;
 
+    @Embedded
+    private CompanyId companyId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 30)
     private DonationRequestStatus status;
@@ -36,10 +40,12 @@ public class DonationRequest extends AuditableAggregateRoot {
     public DonationRequest(
             MermaReferenceId mermaReferenceId,
             BeneficiaryReferenceId beneficiaryReferenceId,
+            CompanyId companyId,
             String notes
     ) {
         this.mermaReferenceId = Objects.requireNonNull(mermaReferenceId, "Merma reference is required");
         this.beneficiaryReferenceId = Objects.requireNonNull(beneficiaryReferenceId, "Beneficiary reference is required");
+        this.companyId = Objects.requireNonNull(companyId, "Company ID is required");
         this.notes = notes;
         this.status = DonationRequestStatus.PENDING;
     }

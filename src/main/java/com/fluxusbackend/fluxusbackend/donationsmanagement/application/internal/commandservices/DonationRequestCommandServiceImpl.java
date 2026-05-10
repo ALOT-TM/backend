@@ -23,6 +23,7 @@ public class DonationRequestCommandServiceImpl implements DonationRequestCommand
     public DonationRequestCommandServiceImpl(DonationRequestRepository repository, MermaRepository mermaRepository) {
         this.repository = repository;
         this.mermaRepository = mermaRepository;
+        
     }
 
     @Override
@@ -35,7 +36,8 @@ public class DonationRequestCommandServiceImpl implements DonationRequestCommand
         if (merma.getStatus() != MermaStatus.DONABLE) {
             throw new IllegalStateException("Only donable mermas can receive requests");
         }
-        var request = new DonationRequest(mermaRef, benefRef, command.notes());
+        var companyId = merma.getCompanyId()
+            .orElseThrow(() -> new IllegalArgumentException("Merma does not have an associated company"));        var request = new DonationRequest(mermaRef, benefRef, companyId, command.notes());
         return repository.save(request);
     }
 
