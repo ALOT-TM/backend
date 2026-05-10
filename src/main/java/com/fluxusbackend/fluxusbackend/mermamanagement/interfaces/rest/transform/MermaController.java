@@ -14,6 +14,7 @@ import com.fluxusbackend.fluxusbackend.mermamanagement.domain.model.valueobjects
 import com.fluxusbackend.fluxusbackend.mermamanagement.domain.services.MermaCommandService;
 import com.fluxusbackend.fluxusbackend.mermamanagement.domain.services.MermaQueryService;
 import com.fluxusbackend.fluxusbackend.mermamanagement.domain.model.queries.ListMermasByCompanyQuery;
+import com.fluxusbackend.fluxusbackend.shared.domain.model.valueobjects.CompanyId;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -136,10 +137,23 @@ public class MermaController {
         return queryService.handle(new ListMermasByCompanyQuery(companyId));
     }
 
-    @GetMapping("/donable")
-    @Operation(summary = "List donable mermas for beneficiaries")
-    public List<Merma> listDonableForBeneficiary() {
-        authorizationService.requireRole(UserRole.BENEFICIARY);
-        return queryService.handle(new ListMermasByStatusQuery(MermaStatus.DONABLE));
+        @GetMapping("/donable")
+        @Operation(summary = "List donable mermas for beneficiaries and retailers")
+        public List<Merma> listDonableForViewer(@RequestParam(required = false) Long companyId) {
+                return listDonableForViewerInternal(companyId);
+        }
+
+        private List<Merma> listDonableForViewerInternal(Long companyId) {
+                var role = authorizationService.getCurrentUserRole();
+                if (role == UserRole.BENEFICIARY) {
+                        return queryService.handle(new ListMermasByStatusQuery(MermaStatus.DONABLE));
+                }
+
+                var resolvedCompanyId = companyId == null
+                                ? authorizationService.getCurrentUserCompanyId()
+                                : new CompanyId(companyId);
+                return queryService.handle(new ListMermasByCompanyQuery(resolvedCompanyId)).stream()
+                                .filter(merma -> merma.getStatus() == MermaStatus.DONABLE)
+                                .toList();
     }
 }

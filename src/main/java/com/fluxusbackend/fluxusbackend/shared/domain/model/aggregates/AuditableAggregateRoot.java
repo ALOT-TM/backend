@@ -8,8 +8,6 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.MappedSuperclass;
 import java.time.Instant;
-import java.util.Optional;
-import com.fluxusbackend.fluxusbackend.shared.domain.model.valueobjects.CompanyId;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -31,9 +29,6 @@ public abstract class AuditableAggregateRoot {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    @Embedded
-    private CompanyId companyId;
-
     protected AuditableAggregateRoot() {
     }
 
@@ -49,12 +44,6 @@ public abstract class AuditableAggregateRoot {
         return updatedAt;
     }
 
-    public Optional<CompanyId> getCompanyId() {
-        return Optional.ofNullable(companyId);
-    }
-
-    public void setCompanyId(CompanyId companyId) {
-        this.companyId = companyId;
-    }
+    
 }
 

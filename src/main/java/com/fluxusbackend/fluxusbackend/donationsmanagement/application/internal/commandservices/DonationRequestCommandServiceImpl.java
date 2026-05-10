@@ -9,6 +9,8 @@ import com.fluxusbackend.fluxusbackend.donationsmanagement.domain.model.valueobj
 import com.fluxusbackend.fluxusbackend.donationsmanagement.domain.model.valueobjects.MermaReferenceId;
 import com.fluxusbackend.fluxusbackend.donationsmanagement.domain.services.DonationRequestCommandService;
 import com.fluxusbackend.fluxusbackend.donationsmanagement.infrastructure.persistence.jpa.repositories.DonationRequestRepository;
+import com.fluxusbackend.fluxusbackend.mermamanagement.domain.model.enums.MermaStatus;
+import com.fluxusbackend.fluxusbackend.mermamanagement.infrastructure.persistence.jpa.repositories.MermaRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,9 +18,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class DonationRequestCommandServiceImpl implements DonationRequestCommandService {
 
     private final DonationRequestRepository repository;
+    private final MermaRepository mermaRepository;
 
-    public DonationRequestCommandServiceImpl(DonationRequestRepository repository) {
+    public DonationRequestCommandServiceImpl(DonationRequestRepository repository, MermaRepository mermaRepository) {
         this.repository = repository;
+        this.mermaRepository = mermaRepository;
     }
 
     @Override
@@ -26,6 +30,11 @@ public class DonationRequestCommandServiceImpl implements DonationRequestCommand
     public DonationRequest handle(CreateDonationRequestCommand command) {
         var mermaRef = new MermaReferenceId(command.mermaId());
         var benefRef = new BeneficiaryReferenceId(command.beneficiaryId());
+        var merma = mermaRepository.findById(mermaRef.value())
+                .orElseThrow(() -> new IllegalArgumentException("Merma not found"));
+        if (merma.getStatus() != MermaStatus.DONABLE) {
+            throw new IllegalStateException("Only donable mermas can receive requests");
+        }
         var request = new DonationRequest(mermaRef, benefRef, command.notes());
         return repository.save(request);
     }
@@ -36,7 +45,9 @@ public class DonationRequestCommandServiceImpl implements DonationRequestCommand
         var request = repository.findById(command.requestId().value())
             .orElseThrow(() -> new IllegalArgumentException("Donation request not found"));
         request.accept();
-        return repository.save(request);
+        repository.save(request);
+        updateMermaToInProcess(request.getMermaReferenceId().value());
+        return request;
     }
 
     @Override
@@ -45,7 +56,9 @@ public class DonationRequestCommandServiceImpl implements DonationRequestCommand
         var request = repository.findById(command.requestId().value())
             .orElseThrow(() -> new IllegalArgumentException("Donation request not found"));
         request.reject();
-        return repository.save(request);
+        repository.save(request);
+        updateMermaToInProcess(request.getMermaReferenceId().value());
+        return request;
     }
 
     @Override
@@ -55,5 +68,14 @@ public class DonationRequestCommandServiceImpl implements DonationRequestCommand
             .orElseThrow(() -> new IllegalArgumentException("Donation request not found"));
         request.cancel();
         return repository.save(request);
+    }
+
+    private void updateMermaToInProcess(Long mermaId) {
+        var merma = mermaRepository.findById(mermaId)
+                .orElseThrow(() -> new IllegalArgumentException("Merma not found"));
+        if (merma.getStatus() == MermaStatus.DONABLE) {
+            merma.markInProcess();
+            mermaRepository.save(merma);
+        }
     }
 }

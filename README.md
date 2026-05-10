@@ -73,7 +73,7 @@ Este repositorio está en un estado funcional y compilable. Cambios principales 
 - **Swagger UI con JWT**: `OpenApiConfig` configura autenticación Bearer en Swagger (candado 🔒 en endpoints protegidos).
 - **Sin formulario de login**: `SecurityConfig` deshabilita form login y HTTP Basic. Solo API REST.
 - **Seguridad stateless**: `SessionCreationPolicy.STATELESS` + JWT validation en cada request.
-- **Multi-tenancy**: `CompanyId` embebido en todas las entidades. ACL filtra datos por `companyId`.
+- **Multi-tenancy**: `CompanyId` se aplica a las entidades retail y de trazabilidad. Los beneficiarios no llevan `companyId`; ACL filtra datos por `companyId` donde corresponde.
 - **MySQL persistencia**: Base de datos `fluxus` con auto-creación de esquema. DDL mode `update`.
 - `AuthenticatedUserPrincipal` y `CurrentUserProvider` exponen usuario desde `SecurityContext`.
 - `Company` aggregate para representar empresas retail.
@@ -120,11 +120,12 @@ Responsabilidad: registrar y clasificar productos en merma (estado, motivo, venc
 - Servicios: `MermaCommandService`, `MermaQueryService`
 - ACL (provider): `MermaContextFacade` (expuesto a Donations)
 
-Reglas clave:
-- Una merma se registra como `REGISTERED`.
-- Solo una merma `REGISTERED` puede pasar a `DONABLE` o `NOT_DONABLE`.
-- Solo una merma `DONABLE` puede pasar a `DONATED`.
-
+Regla clave:
+- La donacion inicia en `ASSIGNED`.
+- Solo una donacion `ASSIGNED` puede pasar a `DELIVERED`.
+- Solo una donacion `DELIVERED` puede pasar a `CONFIRMED`.
+- Al confirmar recepcion se marca la merma como `DONATED` via ACL.
+- Las operaciones retail quedan aisladas por `companyId`.
 ### Donations Management
 Responsabilidad: coordinar donaciones a partir de mermas donables y beneficiarios activos.
 
@@ -163,6 +164,7 @@ Reglas:
 - Un beneficiario puede `CANCEL` una solicitud si está en `PENDING` o `ACCEPTED`.
 - Una solicitud se marca como `COMPLETED` una vez alcanza ese estado luego de ser aceptada.
 - Una merma donable puede tener múltiples solicitudes de diferentes beneficiarios.
+- Cuando el manager procesa una solicitud, la merma pasa a `IN_PROCESS` para evitar nuevas asignaciones.
 
 ### Beneficiaries Management
 Responsabilidad: administrar instituciones beneficiarias y su disponibilidad.
@@ -181,6 +183,7 @@ Responsabilidad: administrar instituciones beneficiarias y su disponibilidad.
 Reglas clave:
 - Un beneficiario se registra como `ACTIVE`.
 - Puede ser activado o desactivado segun gestion administrativa.
+- Un beneficiario no se asocia a `companyId`.
 
 ### Identity & Access Management (IAM)
 Responsabilidad: registro y autenticacion de usuarios internos y beneficiarios.
@@ -209,6 +212,7 @@ Responsabilidad: agrupar la informacion operativa por empresa/cliente retail.
 Reglas clave:
 - Cada usuario interno queda asociado a una `companyId`.
 - La informacion operativa de merma y donacion queda aislada por `companyId` para usuarios retail.
+- Las companies se usan como catálogo público para el alta de retail y como filtro de aislamiento multi-tenant.
 
 ## Integraciones entre contextos (ACL)
 
@@ -216,6 +220,7 @@ Reglas clave:
 - Merma y Beneficiaries exponen facades con operaciones minimas (buscar id, marcar donada).
 - Las operaciones de merma y donacion quedan restringidas por `companyId` para usuarios retail.
 - Los usuarios beneficiarios siguen accediendo a la logica de donaciones segun su flujo propio y no usan el mismo ACL de pertenencia por empresa para merma publicada.
+- El backend toma `userId` y `companyId` directamente del JWT autenticado; el frontend solo transporta el token y reconstruye la sesion a partir de sus claims.
 
 ## Modelo de datos (tablas principales)
 
@@ -227,7 +232,7 @@ Reglas clave:
 - `donation_requests`
   - id, merma_id, beneficiary_id, status, notes, company_id, created_at, updated_at
 - `beneficiaries`
-  - id, beneficiary_name, type, address, status, company_id, created_at, updated_at
+  - id, beneficiary_name, type, address, status, created_at, updated_at
 - `beneficiary_accepted_products`
   - beneficiary_id, accepted_product
 - `companies`
@@ -239,7 +244,7 @@ Relaciones principales:
 - Donation referencia Merma (merma_id) y Beneficiary (beneficiary_id) como VOs embebidos.
 - DonationRequest references Merma (merma_id) and Beneficiary (beneficiary_id) as embedded value objects.
 - Beneficiary tiene coleccion de productos aceptados.
-- Todas las entidades tienen company_id para multi-tenancy.
+- Las entidades retail y de trazabilidad usan `company_id`; `beneficiaries` no.
 
 ## Base URL y documentacion
 
@@ -322,6 +327,12 @@ La app **no tiene formulario de login** en la web. La autenticación es **JWT ba
    Respuesta:
    ```json
    {
+     "user": {
+       "id": 1,
+       "email": "user@test.com",
+       "role": "MANAGER",
+       "companyId": 1
+     },
      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
    }
    ```
@@ -347,7 +358,7 @@ La app **no tiene formulario de login** en la web. La autenticación es **JWT ba
 
 ## Estados y enums
 
-MermaStatus: `REGISTERED`, `DONABLE`, `DONATED`, `NOT_DONABLE`
+MermaStatus: `REGISTERED`, `DONABLE`, `IN_PROCESS`, `DONATED`, `NOT_DONABLE`
 MermaReason: `EXPIRATION`, `DAMAGED_PACKAGING`, `OVERSTOCK`
 BeneficiaryStatus: `ACTIVE`, `INACTIVE`
 BeneficiaryType: `SCHOOL`, `SHELTER`, `NGO`
@@ -364,7 +375,9 @@ Merma:
 - `PATCH /api/mermas/{mermaId}/not-donable`
 - `PATCH /api/mermas/{mermaId}/donated`
 - `GET /api/mermas/{mermaId}`
-- `GET /api/mermas?status=REGISTERED|DONABLE|DONATED|NOT_DONABLE`
+- `GET /api/mermas?status=REGISTERED|DONABLE|IN_PROCESS|DONATED|NOT_DONABLE`
+- `GET /api/mermas/donable?companyId=X`
+- `GET /api/mermas/company`
 
 Beneficiarios:
 - `POST /api/beneficiaries/register`
@@ -373,6 +386,7 @@ Beneficiarios:
 - `PATCH /api/beneficiaries/{beneficiaryId}/deactivate`
 - `GET /api/beneficiaries/{beneficiaryId}`
 - `GET /api/beneficiaries?status=ACTIVE|INACTIVE`
+- `beneficiaries` no lleva `company_id` en el modelo actual.
 
 Donaciones:
 - `POST /api/donations/create`

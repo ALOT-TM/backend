@@ -9,6 +9,9 @@ import com.fluxusbackend.fluxusbackend.donationsmanagement.domain.model.valueobj
 import com.fluxusbackend.fluxusbackend.donationsmanagement.domain.model.valueobjects.ReceptionDate;
 import com.fluxusbackend.fluxusbackend.donationsmanagement.domain.model.valueobjects.ScheduledDeliveryDate;
 import com.fluxusbackend.fluxusbackend.shared.domain.model.aggregates.AuditableAggregateRoot;
+import com.fluxusbackend.fluxusbackend.shared.domain.model.aggregates.CompanyScoped;
+import com.fluxusbackend.fluxusbackend.shared.domain.model.valueobjects.CompanyId;
+import java.util.Optional;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
@@ -20,7 +23,7 @@ import java.util.Optional;
 
 @Entity
 @Table(name = "donations")
-public class Donation extends AuditableAggregateRoot {
+public class Donation extends AuditableAggregateRoot implements CompanyScoped {
 
     @Embedded
     private MermaReferenceId mermaReferenceId;
@@ -46,6 +49,9 @@ public class Donation extends AuditableAggregateRoot {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 30)
     private DonationStatus status;
+
+    @Embedded
+    private CompanyId companyId;
 
     protected Donation() {
     }
@@ -97,6 +103,14 @@ public class Donation extends AuditableAggregateRoot {
 
     public DonationStatus getStatus() {
         return status;
+    }
+
+    public java.util.Optional<CompanyId> getCompanyId() {
+        return Optional.ofNullable(companyId);
+    }
+
+    public void setCompanyId(CompanyId companyId) {
+        this.companyId = companyId;
     }
 
     public void markDelivered(DeliveryDate deliveryDate) {

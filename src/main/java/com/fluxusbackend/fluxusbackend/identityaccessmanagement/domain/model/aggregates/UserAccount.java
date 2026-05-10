@@ -7,7 +7,9 @@ import com.fluxusbackend.fluxusbackend.identityaccessmanagement.domain.model.val
 import com.fluxusbackend.fluxusbackend.identityaccessmanagement.domain.model.valueobjects.PasswordHash;
 import com.fluxusbackend.fluxusbackend.identityaccessmanagement.domain.model.valueobjects.UserId;
 import com.fluxusbackend.fluxusbackend.shared.domain.model.aggregates.AuditableAggregateRoot;
+import com.fluxusbackend.fluxusbackend.shared.domain.model.aggregates.CompanyScoped;
 import com.fluxusbackend.fluxusbackend.shared.domain.model.valueobjects.CompanyId;
+import java.util.Optional;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
@@ -18,7 +20,7 @@ import java.util.Objects;
 
 @Entity
 @Table(name = "user_accounts")
-public class UserAccount extends AuditableAggregateRoot {
+public class UserAccount extends AuditableAggregateRoot implements CompanyScoped {
 
     @Embedded
     private EmailAddress email;
@@ -70,8 +72,15 @@ public class UserAccount extends AuditableAggregateRoot {
         return status;
     }
 
-    public java.util.Optional<CompanyId> getCompanyId() {
-        return super.getCompanyId();
+    @Embedded
+    private CompanyId companyId;
+
+    public Optional<CompanyId> getCompanyId() {
+        return Optional.ofNullable(companyId);
+    }
+
+    public void setCompanyId(CompanyId companyId) {
+        this.companyId = companyId;
     }
 }
 
