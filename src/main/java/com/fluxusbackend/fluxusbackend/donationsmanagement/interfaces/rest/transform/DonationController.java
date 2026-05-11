@@ -21,6 +21,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -37,8 +38,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/donations")
-@Tag(name = "Donations Management", description = "Donation operations")
-public class DonationController {
+@Tag(name = "Donations Management", description = "Donation operations")@SecurityRequirement(name = "bearer")public class DonationController {
 
     private final DonationCommandService commandService;
     private final DonationQueryService queryService;
