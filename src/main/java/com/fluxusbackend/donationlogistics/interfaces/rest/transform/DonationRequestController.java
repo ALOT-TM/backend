@@ -7,7 +7,7 @@ import com.fluxusbackend.donationlogistics.domain.model.commands.CreateDonationR
 import com.fluxusbackend.donationlogistics.domain.model.commands.RejectDonationRequestCommand;
 import com.fluxusbackend.donationlogistics.domain.model.queries.GetDonationRequestByIdQuery;
 import com.fluxusbackend.donationlogistics.domain.model.queries.ListDonationRequestsByBeneficiaryQuery;
-import com.fluxusbackend.donationlogistics.domain.model.queries.ListDonationRequestsByMermaQuery;
+import com.fluxusbackend.donationlogistics.domain.model.queries.ListDonationRequestsByShrinkageQuery;
 import com.fluxusbackend.donationlogistics.domain.model.queries.ListDonationRequestsByCompanyQuery;
 import com.fluxusbackend.donationlogistics.domain.model.queries.ListDonationRequestsByProductNameQuery;
 import com.fluxusbackend.donationlogistics.domain.model.valueobjects.BeneficiaryReferenceId;
@@ -60,7 +60,7 @@ public class DonationRequestController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Create donation request (beneficiary claims donable merma)")
+    @Operation(summary = "Create donation request (beneficiary claims donable shrinkage)")
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Donation request created",
                     content = @Content(schema = @Schema(implementation = DonationRequest.class))),
@@ -97,11 +97,11 @@ public class DonationRequestController {
         return queryService.handle(new ListDonationRequestsByBeneficiaryQuery(new BeneficiaryReferenceId(beneficiaryId)));
     }
 
-    @GetMapping("/merma/{mermaId}")
-    @Operation(summary = "List donation requests for a merma (manager only)")
-    public List<DonationRequest> listByMerma(@PathVariable Long mermaId) {
+    @GetMapping("/shrinkage/{shrinkageId}")
+    @Operation(summary = "List donation requests for a shrinkage (manager only)")
+    public List<DonationRequest> listByShrinkage(@PathVariable Long shrinkageId) {
         authorizationService.requireActor(UserActor.RETAIL);
-        return queryService.handle(new ListDonationRequestsByMermaQuery(new com.fluxusbackend.donationlogistics.domain.model.valueobjects.MermaReferenceId(mermaId)));
+        return queryService.handle(new ListDonationRequestsByShrinkageQuery(new com.fluxusbackend.donationlogistics.domain.model.valueobjects.ShrinkageReferenceId(shrinkageId)));
     }
 
     @PatchMapping("/{requestId}/accept")
@@ -134,7 +134,7 @@ public class DonationRequestController {
     }
 
     @GetMapping("/product/{productName}")
-    @Operation(summary = "List donation requests for merma by product name")
+    @Operation(summary = "List donation requests for shrinkage by product name")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Donation requests retrieved",
                     content = @Content(schema = @Schema(implementation = DonationRequest.class))),

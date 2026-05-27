@@ -57,7 +57,7 @@ import org.springframework.web.bind.annotation.RestController;
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Donation created",
                     content = @Content(schema = @Schema(implementation = Donation.class))),
-            @ApiResponse(responseCode = "404", description = "Merma or beneficiary not found", content = @Content),
+            @ApiResponse(responseCode = "404", description = "Shrinkage or beneficiary not found", content = @Content),
             @ApiResponse(responseCode = "403", description = "Access denied", content = @Content)
     })
     public Donation createDonation(@Valid @RequestBody CreateDonationCommand command) {

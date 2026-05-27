@@ -1,23 +1,29 @@
 package com.fluxusbackend.donationlogistics.domain.model.aggregates;
 
+import com.fluxusbackend.donationlogistics.domain.model.enums.DonationItemStatus;
 import com.fluxusbackend.donationlogistics.domain.model.enums.DonationStatus;
 import com.fluxusbackend.donationlogistics.domain.model.valueobjects.BeneficiaryReferenceId;
 import com.fluxusbackend.donationlogistics.domain.model.valueobjects.DeliveryDate;
 import com.fluxusbackend.donationlogistics.domain.model.valueobjects.DonationId;
 import com.fluxusbackend.donationlogistics.domain.model.valueobjects.DonationQuantity;
-import com.fluxusbackend.donationlogistics.domain.model.valueobjects.MermaReferenceId;
+import com.fluxusbackend.donationlogistics.domain.model.valueobjects.ShrinkageReferenceId;
 import com.fluxusbackend.donationlogistics.domain.model.valueobjects.ReceptionDate;
 import com.fluxusbackend.donationlogistics.domain.model.valueobjects.ScheduledDeliveryDate;
 import com.fluxusbackend.shared.domain.model.aggregates.AuditableAggregateRoot;
 import com.fluxusbackend.shared.domain.model.aggregates.CompanyScoped;
 import com.fluxusbackend.shared.domain.model.valueobjects.CompanyId;
-import java.util.Optional;
+import jakarta.persistence.AttributeOverride;
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -25,10 +31,11 @@ import java.util.Optional;
 @Table(name = "donations")
 public class Donation extends AuditableAggregateRoot implements CompanyScoped {
 
-    @Embedded
-    private MermaReferenceId mermaReferenceId;
+    @OneToMany(mappedBy = "donation", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<DonationItem> items = new ArrayList<>();
 
     @Embedded
+    @AttributeOverride(name = "value", column = @Column(name = "beneficiary_institution_id", nullable = false))
     private BeneficiaryReferenceId beneficiaryReferenceId;
 
     @Embedded
@@ -50,6 +57,9 @@ public class Donation extends AuditableAggregateRoot implements CompanyScoped {
     @Column(name = "status", nullable = false, length = 30)
     private DonationStatus status;
 
+    @Column(name = "completed_at")
+    private Instant completedAt;
+
     @Embedded
     private CompanyId companyId;
 
@@ -57,24 +67,28 @@ public class Donation extends AuditableAggregateRoot implements CompanyScoped {
     }
 
     public Donation(
-            MermaReferenceId mermaReferenceId,
+            ShrinkageReferenceId shrinkageReferenceId,
             BeneficiaryReferenceId beneficiaryReferenceId,
             DonationQuantity quantity,
             ScheduledDeliveryDate scheduledDeliveryDate
     ) {
-        this.mermaReferenceId = Objects.requireNonNull(mermaReferenceId, "Merma reference id is required");
         this.beneficiaryReferenceId = Objects.requireNonNull(beneficiaryReferenceId, "Beneficiary reference id is required");
         this.quantity = Objects.requireNonNull(quantity, "Donation quantity is required");
         this.scheduledDeliveryDate = Objects.requireNonNull(scheduledDeliveryDate, "Scheduled delivery date is required");
         this.status = DonationStatus.ASSIGNED;
+        this.items.add(new DonationItem(this, shrinkageReferenceId, DonationItemStatus.ASSIGNED));
     }
 
     public DonationId getDonationId() {
         return new DonationId(getId());
     }
 
-    public MermaReferenceId getMermaReferenceId() {
-        return mermaReferenceId;
+    public List<DonationItem> getItems() {
+        return items;
+    }
+
+    public ShrinkageReferenceId getShrinkageReferenceId() {
+        return items.isEmpty() ? null : items.get(0).getShrinkageReferenceId();
     }
 
     public BeneficiaryReferenceId getBeneficiaryReferenceId() {
@@ -105,6 +119,10 @@ public class Donation extends AuditableAggregateRoot implements CompanyScoped {
         return status;
     }
 
+    public Instant getCompletedAt() {
+        return completedAt;
+    }
+
     public java.util.Optional<CompanyId> getCompanyId() {
         return Optional.ofNullable(companyId);
     }
@@ -119,6 +137,9 @@ public class Donation extends AuditableAggregateRoot implements CompanyScoped {
         }
         this.deliveryDate = Objects.requireNonNull(deliveryDate, "Delivery date is required");
         this.status = DonationStatus.DELIVERED;
+        for (var item : items) {
+            item.setStatus(DonationItemStatus.DELIVERED);
+        }
     }
 
     public void confirmReception(ReceptionDate receptionDate, Optional<String> comment) {
@@ -128,6 +149,10 @@ public class Donation extends AuditableAggregateRoot implements CompanyScoped {
         this.receptionDate = Objects.requireNonNull(receptionDate, "Reception date is required");
         this.receptionComment = comment == null ? null : comment.orElse(null);
         this.status = DonationStatus.CONFIRMED;
+        this.completedAt = Instant.now();
+        for (var item : items) {
+            item.setStatus(DonationItemStatus.CONFIRMED);
+        }
     }
 }
 

@@ -6,13 +6,17 @@ import com.fluxusbackend.shrinkage.domain.model.commands.MarkShrinkageDonableCom
 import com.fluxusbackend.shrinkage.domain.model.commands.MarkShrinkageDonatedCommand;
 import com.fluxusbackend.shrinkage.domain.model.commands.MarkShrinkageNotDonableCommand;
 import com.fluxusbackend.shrinkage.domain.model.commands.RegisterShrinkageCommand;
+import com.fluxusbackend.shrinkage.domain.model.events.ShrinkageStatusChangedEvent;
+import com.fluxusbackend.shrinkage.domain.model.valueobjects.ShrinkageId;
 import com.fluxusbackend.shrinkage.domain.services.ShrinkageCommandService;
 import com.fluxusbackend.shrinkage.infrastructure.persistence.jpa.repositories.CategoryRepository;
 import com.fluxusbackend.shrinkage.infrastructure.persistence.jpa.repositories.ShrinkageReasonRepository;
 import com.fluxusbackend.shrinkage.infrastructure.persistence.jpa.repositories.ShrinkageRepository;
 import com.fluxusbackend.shared.application.audit.StatusChangeLogService;
 import jakarta.transaction.Transactional;
+import java.time.Instant;
 import java.util.NoSuchElementException;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 @Service

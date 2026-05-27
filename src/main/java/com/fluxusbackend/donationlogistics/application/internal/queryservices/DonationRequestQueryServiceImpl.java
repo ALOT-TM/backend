@@ -3,7 +3,7 @@ package com.fluxusbackend.donationlogistics.application.internal.queryservices;
 import com.fluxusbackend.donationlogistics.domain.model.aggregates.DonationRequest;
 import com.fluxusbackend.donationlogistics.domain.model.queries.GetDonationRequestByIdQuery;
 import com.fluxusbackend.donationlogistics.domain.model.queries.ListDonationRequestsByBeneficiaryQuery;
-import com.fluxusbackend.donationlogistics.domain.model.queries.ListDonationRequestsByMermaQuery;
+import com.fluxusbackend.donationlogistics.domain.model.queries.ListDonationRequestsByShrinkageQuery;
 import com.fluxusbackend.donationlogistics.domain.model.queries.ListDonationRequestsByCompanyQuery;
 import com.fluxusbackend.donationlogistics.domain.model.queries.ListDonationRequestsByProductNameQuery;
 import com.fluxusbackend.donationlogistics.domain.services.DonationRequestQueryService;
@@ -36,8 +36,8 @@ public class DonationRequestQueryServiceImpl implements DonationRequestQueryServ
 
     @Override
     @Transactional(readOnly = true)
-    public List<DonationRequest> handle(ListDonationRequestsByMermaQuery query) {
-        return repository.findByMermaId(query.mermaReferenceId().value());
+    public List<DonationRequest> handle(ListDonationRequestsByShrinkageQuery query) {
+        return repository.findByShrinkageId(query.shrinkageReferenceId().value());
     }
 
     @Override

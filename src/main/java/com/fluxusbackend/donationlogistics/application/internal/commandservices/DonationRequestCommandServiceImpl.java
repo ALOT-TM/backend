@@ -8,16 +8,20 @@ import com.fluxusbackend.donationlogistics.domain.model.commands.CreateDonationR
 import com.fluxusbackend.donationlogistics.domain.model.commands.RejectDonationRequestCommand;
 import com.fluxusbackend.donationlogistics.domain.model.valueobjects.BeneficiaryReferenceId;
 import com.fluxusbackend.donationlogistics.domain.model.valueobjects.DonationQuantity;
-import com.fluxusbackend.donationlogistics.domain.model.valueobjects.MermaReferenceId;
+import com.fluxusbackend.donationlogistics.domain.model.valueobjects.ShrinkageReferenceId;
 import com.fluxusbackend.donationlogistics.domain.model.valueobjects.ScheduledDeliveryDate;
 import com.fluxusbackend.donationlogistics.domain.services.DonationCommandService;
 import com.fluxusbackend.donationlogistics.domain.services.DonationRequestCommandService;
 import com.fluxusbackend.donationlogistics.infrastructure.persistence.jpa.repositories.DonationRequestRepository;
 import com.fluxusbackend.shrinkage.domain.model.enums.ShrinkageStatus;
+import com.fluxusbackend.shrinkage.domain.model.events.ShrinkageStatusChangedEvent;
+import com.fluxusbackend.shrinkage.domain.model.valueobjects.ShrinkageId;
 import com.fluxusbackend.shrinkage.infrastructure.persistence.jpa.repositories.ShrinkageRepository;
 import com.fluxusbackend.shared.application.audit.StatusChangeLogService;
 
+import java.time.Instant;
 import java.time.LocalDate;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,40 +29,35 @@ import org.springframework.transaction.annotation.Transactional;
 public class DonationRequestCommandServiceImpl implements DonationRequestCommandService {
 
     private final DonationRequestRepository repository;
-    private final ShrinkageRepository mermaRepository;
+    private final ShrinkageRepository shrinkageRepository;
+    private final ApplicationEventPublisher eventPublisher;
     private final StatusChangeLogService statusChangeLogService;
-
     public DonationRequestCommandServiceImpl(
             DonationRequestRepository repository,
-            ShrinkageRepository mermaRepository,
+            ShrinkageRepository shrinkageRepository,
+            ApplicationEventPublisher eventPublisher,
             StatusChangeLogService statusChangeLogService
     ) {
         this.repository = repository;
-        this.mermaRepository = mermaRepository;
+        this.shrinkageRepository = shrinkageRepository;
+        this.eventPublisher = eventPublisher;
         this.statusChangeLogService = statusChangeLogService;
     }
 
     @Override
     @Transactional
     public DonationRequest handle(CreateDonationRequestCommand command) {
-        var mermaRef = new MermaReferenceId(command.mermaId());
+        var shrinkageRef = new ShrinkageReferenceId(command.mermaId());
         var benefRef = new BeneficiaryReferenceId(command.beneficiaryId());
-        var merma = mermaRepository.findById(mermaRef.value())
-                .orElseThrow(() -> new IllegalArgumentException("Merma not found"));
-        if (merma.getStatus() != ShrinkageStatus.DONABLE) {
-            throw new IllegalStateException("Only donable mermas can receive requests");
+        var shrinkage = shrinkageRepository.findById(shrinkageRef.value())
+                .orElseThrow(() -> new IllegalArgumentException("Shrinkage not found"));
+        if (shrinkage.getStatus() != ShrinkageStatus.DONABLE) {
+            throw new IllegalStateException("Only donable shrinkages can receive requests");
         }
-        var companyId = merma.getCompanyId()
-            .orElseThrow(() -> new IllegalArgumentException("Merma does not have an associated company"));
-        var request = new DonationRequest(mermaRef, benefRef, companyId, command.notes());
-        var saved = repository.save(request);
-        statusChangeLogService.recordChange(
-                "DONATION_REQUEST",
-                saved.getDonationRequestId().value(),
-                null,
-                saved.getStatus().name()
-        );
-        return saved;
+        var companyId = shrinkage.getCompanyId()
+            .orElseThrow(() -> new IllegalArgumentException("Shrinkage does not have an associated company"));
+        var request = new DonationRequest(shrinkageRef, benefRef, companyId, command.notes());
+        return repository.save(request);
     }
 
     @Override
@@ -68,15 +67,15 @@ public class DonationRequestCommandServiceImpl implements DonationRequestCommand
             .orElseThrow(() -> new IllegalArgumentException("Donation request not found"));
         var fromStatus = request.getStatus();
         request.accept();
-        repository.save(request);
-        updateMermaToInProcess(request.getMermaReferenceId().value());
+        var saved = repository.save(request);
         statusChangeLogService.recordChange(
                 "DONATION_REQUEST",
-                request.getDonationRequestId().value(),
+                saved.getDonationRequestId().value(),
                 fromStatus.name(),
-                request.getStatus().name()
+                saved.getStatus().name()
         );
-        return request;
+        updateShrinkageToInProcess(request.getShrinkageReferenceId().value());
+        return saved;
     }
 
     @Override
@@ -86,15 +85,15 @@ public class DonationRequestCommandServiceImpl implements DonationRequestCommand
             .orElseThrow(() -> new IllegalArgumentException("Donation request not found"));
         var fromStatus = request.getStatus();
         request.reject();
-        repository.save(request);
-        updateMermaToInProcess(request.getMermaReferenceId().value());
+        var saved = repository.save(request);
         statusChangeLogService.recordChange(
                 "DONATION_REQUEST",
-                request.getDonationRequestId().value(),
+                saved.getDonationRequestId().value(),
                 fromStatus.name(),
-                request.getStatus().name()
+                saved.getStatus().name()
         );
-        return request;
+        updateShrinkageToInProcess(request.getShrinkageReferenceId().value());
+        return saved;
     }
 
     @Override
@@ -114,19 +113,14 @@ public class DonationRequestCommandServiceImpl implements DonationRequestCommand
         return saved;
     }
 
-    private void updateMermaToInProcess(Long mermaId) {
-        var merma = mermaRepository.findById(mermaId)
-                .orElseThrow(() -> new IllegalArgumentException("Merma not found"));
-        if (merma.getStatus() == ShrinkageStatus.DONABLE) {
-            var fromStatus = merma.getStatus();
-            merma.markInProcess();
-            var saved = mermaRepository.save(merma);
-            statusChangeLogService.recordChange(
-                    "SHRINKAGE",
-                    saved.getShrinkageId(),
-                    fromStatus.name(),
-                    saved.getStatus().name()
-            );
+    private void updateShrinkageToInProcess(Long shrinkageId) {
+        var shrinkage = shrinkageRepository.findById(shrinkageId)
+                .orElseThrow(() -> new IllegalArgumentException("Shrinkage not found"));
+        if (shrinkage.getStatus() == ShrinkageStatus.DONABLE) {
+            var oldStatus = shrinkage.getStatus();
+            shrinkage.markInProcess();
+            var saved = shrinkageRepository.save(shrinkage);
+            eventPublisher.publishEvent(new ShrinkageStatusChangedEvent(new ShrinkageId(saved.getShrinkageId()), oldStatus, saved.getStatus(), Instant.now()));
         }
     }
 
