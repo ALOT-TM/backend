@@ -2,7 +2,7 @@ package com.fluxusbackend.donationlogistics.domain.model.aggregates;
 
 import com.fluxusbackend.donationlogistics.domain.model.enums.DonationRequestStatus;
 import com.fluxusbackend.donationlogistics.domain.model.valueobjects.BeneficiaryReferenceId;
-import com.fluxusbackend.donationlogistics.domain.model.valueobjects.MermaReferenceId;
+import com.fluxusbackend.donationlogistics.domain.model.valueobjects.ShrinkageReferenceId;
 import com.fluxusbackend.donationlogistics.domain.model.valueobjects.DonationRequestId;
 import com.fluxusbackend.shared.domain.model.aggregates.AuditableAggregateRoot;
 import com.fluxusbackend.shared.domain.model.valueobjects.CompanyId;
@@ -19,7 +19,7 @@ import java.util.Objects;
 public class DonationRequest extends AuditableAggregateRoot {
 
     @Embedded
-    private MermaReferenceId mermaReferenceId;
+    private ShrinkageReferenceId shrinkageReferenceId;
 
     @Embedded
     private BeneficiaryReferenceId beneficiaryReferenceId;
@@ -38,12 +38,12 @@ public class DonationRequest extends AuditableAggregateRoot {
     }
 
     public DonationRequest(
-            MermaReferenceId mermaReferenceId,
+            ShrinkageReferenceId shrinkageReferenceId,
             BeneficiaryReferenceId beneficiaryReferenceId,
             CompanyId companyId,
             String notes
     ) {
-        this.mermaReferenceId = Objects.requireNonNull(mermaReferenceId, "Merma reference is required");
+        this.shrinkageReferenceId = Objects.requireNonNull(shrinkageReferenceId, "Shrinkage reference is required");
         this.beneficiaryReferenceId = Objects.requireNonNull(beneficiaryReferenceId, "Beneficiary reference is required");
         this.companyId = Objects.requireNonNull(companyId, "Company ID is required");
         this.notes = notes;
@@ -54,8 +54,8 @@ public class DonationRequest extends AuditableAggregateRoot {
         return new DonationRequestId(getId());
     }
 
-    public MermaReferenceId getMermaReferenceId() {
-        return mermaReferenceId;
+    public ShrinkageReferenceId getShrinkageReferenceId() {
+        return shrinkageReferenceId;
     }
 
     public BeneficiaryReferenceId getBeneficiaryReferenceId() {

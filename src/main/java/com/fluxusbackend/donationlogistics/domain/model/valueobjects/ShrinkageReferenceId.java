@@ -6,12 +6,12 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
 
 @Embeddable
-public record MermaReferenceId(@Column(name = "merma_id", nullable = false) Long value) {
+public record ShrinkageReferenceId(@Column(name = "shrinkage_id", nullable = false) Long value) {
 
     @JsonCreator(mode = JsonCreator.Mode.DELEGATING)
-    public MermaReferenceId {
+    public ShrinkageReferenceId {
         if (value == null || value <= 0) {
-            throw new IllegalArgumentException("Merma reference id must be positive");
+            throw new IllegalArgumentException("Shrinkage reference id must be positive");
         }
     }
 
@@ -20,5 +20,3 @@ public record MermaReferenceId(@Column(name = "merma_id", nullable = false) Long
         return value;
     }
 }
-
-

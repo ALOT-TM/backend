@@ -6,12 +6,16 @@ import com.fluxusbackend.shrinkage.domain.model.commands.MarkShrinkageDonableCom
 import com.fluxusbackend.shrinkage.domain.model.commands.MarkShrinkageDonatedCommand;
 import com.fluxusbackend.shrinkage.domain.model.commands.MarkShrinkageNotDonableCommand;
 import com.fluxusbackend.shrinkage.domain.model.commands.RegisterShrinkageCommand;
+import com.fluxusbackend.shrinkage.domain.model.events.ShrinkageStatusChangedEvent;
+import com.fluxusbackend.shrinkage.domain.model.valueobjects.ShrinkageId;
 import com.fluxusbackend.shrinkage.domain.services.ShrinkageCommandService;
 import com.fluxusbackend.shrinkage.infrastructure.persistence.jpa.repositories.CategoryRepository;
 import com.fluxusbackend.shrinkage.infrastructure.persistence.jpa.repositories.ShrinkageReasonRepository;
 import com.fluxusbackend.shrinkage.infrastructure.persistence.jpa.repositories.ShrinkageRepository;
 import jakarta.transaction.Transactional;
+import java.time.Instant;
 import java.util.NoSuchElementException;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -22,19 +26,22 @@ public class ShrinkageCommandServiceImpl implements ShrinkageCommandService {
     private final CategoryRepository categoryRepository;
     private final ShrinkageReasonRepository shrinkageReasonRepository;
     private final com.fluxusbackend.shared.application.security.AclService aclService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public ShrinkageCommandServiceImpl(
             ShrinkageRepository repository,
             RetailCompanyHeadquarterRepository headquarterRepository,
             CategoryRepository categoryRepository,
             ShrinkageReasonRepository shrinkageReasonRepository,
-            com.fluxusbackend.shared.application.security.AclService aclService
+            com.fluxusbackend.shared.application.security.AclService aclService,
+            ApplicationEventPublisher eventPublisher
     ) {
         this.repository = repository;
         this.headquarterRepository = headquarterRepository;
         this.categoryRepository = categoryRepository;
         this.shrinkageReasonRepository = shrinkageReasonRepository;
         this.aclService = aclService;
+        this.eventPublisher = eventPublisher;
     }
 
     @Override
@@ -63,7 +70,9 @@ public class ShrinkageCommandServiceImpl implements ShrinkageCommandService {
             command.pickupDate()
         );
         shrinkage.setCompanyId(companyId);
-        return repository.save(shrinkage);
+        var saved = repository.save(shrinkage);
+        eventPublisher.publishEvent(new ShrinkageStatusChangedEvent(new ShrinkageId(saved.getShrinkageId()), null, saved.getStatus(), Instant.now()));
+        return saved;
     }
 
     @Override
@@ -72,8 +81,11 @@ public class ShrinkageCommandServiceImpl implements ShrinkageCommandService {
         var shrinkage = repository.findById(command.shrinkageId().value())
                 .orElseThrow(() -> new NoSuchElementException("Shrinkage not found"));
         aclService.ensureSameCompanyForRetail(shrinkage);
+        var oldStatus = shrinkage.getStatus();
         shrinkage.markDonable();
-        return repository.save(shrinkage);
+        var saved = repository.save(shrinkage);
+        eventPublisher.publishEvent(new ShrinkageStatusChangedEvent(new ShrinkageId(saved.getShrinkageId()), oldStatus, saved.getStatus(), Instant.now()));
+        return saved;
     }
 
     @Override
@@ -82,8 +94,11 @@ public class ShrinkageCommandServiceImpl implements ShrinkageCommandService {
         var shrinkage = repository.findById(command.shrinkageId().value())
                 .orElseThrow(() -> new NoSuchElementException("Shrinkage not found"));
         aclService.ensureSameCompanyForRetail(shrinkage);
+        var oldStatus = shrinkage.getStatus();
         shrinkage.markNotDonable();
-        return repository.save(shrinkage);
+        var saved = repository.save(shrinkage);
+        eventPublisher.publishEvent(new ShrinkageStatusChangedEvent(new ShrinkageId(saved.getShrinkageId()), oldStatus, saved.getStatus(), Instant.now()));
+        return saved;
     }
 
     @Override
@@ -92,8 +107,11 @@ public class ShrinkageCommandServiceImpl implements ShrinkageCommandService {
         var shrinkage = repository.findById(command.shrinkageId().value())
                 .orElseThrow(() -> new NoSuchElementException("Shrinkage not found"));
         aclService.ensureSameCompanyForRetail(shrinkage);
+        var oldStatus = shrinkage.getStatus();
         shrinkage.markDonated();
-        return repository.save(shrinkage);
+        var saved = repository.save(shrinkage);
+        eventPublisher.publishEvent(new ShrinkageStatusChangedEvent(new ShrinkageId(saved.getShrinkageId()), oldStatus, saved.getStatus(), Instant.now()));
+        return saved;
     }
 }
 

@@ -5,23 +5,21 @@ import com.fluxusbackend.shrinkage.domain.model.valueobjects.ShrinkageId;
 import java.time.Instant;
 import java.util.Objects;
 
-public final class MermaRegisteredEvent {
+public final class ShrinkageRegisteredEvent {
 
-    private final ShrinkageId mermaId;
+    private final ShrinkageId shrinkageId;
     private final Instant occurredOn;
 
-    public MermaRegisteredEvent(ShrinkageId mermaId, Instant occurredOn) {
-        this.mermaId = Objects.requireNonNull(mermaId, "Merma id is required");
+    public ShrinkageRegisteredEvent(ShrinkageId shrinkageId, Instant occurredOn) {
+        this.shrinkageId = Objects.requireNonNull(shrinkageId, "Shrinkage id is required");
         this.occurredOn = Objects.requireNonNull(occurredOn, "Occurred time is required");
     }
 
-    public ShrinkageId getMermaId() {
-        return mermaId;
+    public ShrinkageId getShrinkageId() {
+        return shrinkageId;
     }
 
     public Instant getOccurredOn() {
         return occurredOn;
     }
 }
-
-

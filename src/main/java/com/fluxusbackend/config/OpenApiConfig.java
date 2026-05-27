@@ -16,7 +16,7 @@ public class OpenApiConfig {
                 .info(new Info()
                         .title("Fluxus Backend API")
                         .version("1.0.0")
-                        .description("API REST para gestión de donaciones y mermas"))
+                        .description("API REST para gestión de donaciones y control de mermas (shrinkage)"))
                 .components(new Components()
                         .addSecuritySchemes("bearer", new SecurityScheme()
                                 .type(SecurityScheme.Type.HTTP)

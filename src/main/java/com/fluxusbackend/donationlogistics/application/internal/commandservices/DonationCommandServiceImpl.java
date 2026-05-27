@@ -1,7 +1,7 @@
 package com.fluxusbackend.donationlogistics.application.internal.commandservices;
 
 import com.fluxusbackend.donationlogistics.application.internal.outboundservices.acl.ExternalBeneficiaryService;
-import com.fluxusbackend.donationlogistics.application.internal.outboundservices.acl.ExternalMermaService;
+import com.fluxusbackend.donationlogistics.application.internal.outboundservices.acl.ExternalShrinkageService;
 import com.fluxusbackend.donationlogistics.domain.model.aggregates.Donation;
 import com.fluxusbackend.donationlogistics.domain.model.commands.ConfirmDonationReceptionCommand;
 import com.fluxusbackend.donationlogistics.domain.model.commands.CreateDonationCommand;
@@ -16,18 +16,18 @@ import org.springframework.stereotype.Service;
 public class DonationCommandServiceImpl implements DonationCommandService {
 
     private final DonationRepository repository;
-    private final ExternalMermaService externalMermaService;
+    private final ExternalShrinkageService externalShrinkageService;
     private final ExternalBeneficiaryService externalBeneficiaryService;
     private final com.fluxusbackend.shared.application.security.AclService aclService;
 
     public DonationCommandServiceImpl(
             DonationRepository repository,
-            ExternalMermaService externalMermaService,
+            ExternalShrinkageService externalShrinkageService,
             ExternalBeneficiaryService externalBeneficiaryService,
             com.fluxusbackend.shared.application.security.AclService aclService
     ) {
         this.repository = repository;
-        this.externalMermaService = externalMermaService;
+        this.externalShrinkageService = externalShrinkageService;
         this.externalBeneficiaryService = externalBeneficiaryService;
         this.aclService = aclService;
     }
@@ -35,23 +35,23 @@ public class DonationCommandServiceImpl implements DonationCommandService {
     @Override
     @Transactional
     public Donation handle(CreateDonationCommand command) {
-        var merma = externalMermaService.fetchMermaById(command.mermaReferenceId().value())
-                .orElseThrow(() -> new NoSuchElementException("Merma not found"));
+        var shrinkage = externalShrinkageService.fetchShrinkageById(command.shrinkageReferenceId().value())
+                .orElseThrow(() -> new NoSuchElementException("Shrinkage not found"));
         var beneficiary = externalBeneficiaryService.fetchBeneficiaryById(command.beneficiaryReferenceId().value())
                 .orElseThrow(() -> new NoSuchElementException("Beneficiary not found"));
 
         var donation = new Donation(
-                merma,
+                shrinkage,
                 beneficiary,
                 command.quantity(),
                 command.scheduledDeliveryDate()
         );
-        // require retail user and set company id on donation to match merma
+        // require retail user and set company id on donation to match shrinkage
         var companyId = aclService.requireRetailCompanyForCreate();
-        // verify merma belongs to same company
-        var mermaCompany = externalMermaService.fetchMermaCompanyId(merma.value());
-        if (mermaCompany.isEmpty() || !mermaCompany.get().equals(companyId.value())) {
-            throw new SecurityException("Merma does not belong to the current user's company");
+        // verify shrinkage belongs to same company
+        var shrinkageCompany = externalShrinkageService.fetchShrinkageCompanyId(shrinkage.value());
+        if (shrinkageCompany.isEmpty() || !shrinkageCompany.get().equals(companyId.value())) {
+            throw new SecurityException("Shrinkage does not belong to the current user's company");
         }
         donation.setCompanyId(companyId);
         return repository.save(donation);
@@ -75,9 +75,9 @@ public class DonationCommandServiceImpl implements DonationCommandService {
         aclService.ensureSameCompanyForRetail(donation);
         donation.confirmReception(command.receptionDate(), command.comment());
         repository.save(donation);
-        var updated = externalMermaService.markMermaDonated(donation.getMermaReferenceId().value());
+        var updated = externalShrinkageService.markShrinkageDonated(donation.getShrinkageReferenceId().value());
         if (!updated) {
-            throw new IllegalStateException("Unable to mark merma as donated");
+            throw new IllegalStateException("Unable to mark shrinkage as donated");
         }
         return donation;
     }

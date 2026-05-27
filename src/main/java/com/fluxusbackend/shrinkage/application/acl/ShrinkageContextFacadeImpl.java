@@ -5,42 +5,42 @@ import com.fluxusbackend.shrinkage.domain.model.queries.GetShrinkageByIdQuery;
 import com.fluxusbackend.shrinkage.domain.model.valueobjects.ShrinkageId;
 import com.fluxusbackend.shrinkage.domain.services.ShrinkageCommandService;
 import com.fluxusbackend.shrinkage.domain.services.ShrinkageQueryService;
-import com.fluxusbackend.shrinkage.interfaces.acl.MermaContextFacade;
+import com.fluxusbackend.shrinkage.interfaces.acl.ShrinkageContextFacade;
 import org.springframework.stereotype.Service;
 
 @Service
-public class ShrinkageContextFacadeImpl implements MermaContextFacade {
+public class ShrinkageContextFacadeImpl implements ShrinkageContextFacade {
 
-    private final ShrinkageCommandService mermaCommandService;
-    private final ShrinkageQueryService mermaQueryService;
+    private final ShrinkageCommandService shrinkageCommandService;
+    private final ShrinkageQueryService shrinkageQueryService;
 
-    public ShrinkageContextFacadeImpl(ShrinkageCommandService mermaCommandService, ShrinkageQueryService mermaQueryService) {
-        this.mermaCommandService = mermaCommandService;
-        this.mermaQueryService = mermaQueryService;
+    public ShrinkageContextFacadeImpl(ShrinkageCommandService shrinkageCommandService, ShrinkageQueryService shrinkageQueryService) {
+        this.shrinkageCommandService = shrinkageCommandService;
+        this.shrinkageQueryService = shrinkageQueryService;
     }
 
     @Override
-    public Long findMermaIdById(Long mermaId) {
-        var query = new GetShrinkageByIdQuery(new ShrinkageId(mermaId));
-        var Shrinkage = mermaQueryService.handle(query);
-        return Shrinkage.map(value -> value.getShrinkageId().longValue()).orElse(0L);
+    public Long findShrinkageIdById(Long shrinkageId) {
+        var query = new GetShrinkageByIdQuery(new ShrinkageId(shrinkageId));
+        var shrinkage = shrinkageQueryService.handle(query);
+        return shrinkage.map(value -> value.getShrinkageId().longValue()).orElse(0L);
     }
 
     @Override
-    public Long findCompanyIdByMermaId(Long mermaId) {
-        var query = new GetShrinkageByIdQuery(new ShrinkageId(mermaId));
-        var Shrinkage = mermaQueryService.handle(query);
-        return Shrinkage.flatMap(m -> m.getCompanyId().map(cid -> cid.value())).orElse(0L);
+    public Long findCompanyIdByShrinkageId(Long shrinkageId) {
+        var query = new GetShrinkageByIdQuery(new ShrinkageId(shrinkageId));
+        var shrinkage = shrinkageQueryService.handle(query);
+        return shrinkage.flatMap(m -> m.getCompanyId().map(cid -> cid.value())).orElse(0L);
     }
 
     @Override
-    public boolean markMermaDonated(Long mermaId) {
-        var query = new GetShrinkageByIdQuery(new ShrinkageId(mermaId));
-        var Shrinkage = mermaQueryService.handle(query);
-        if (Shrinkage.isEmpty()) {
+    public boolean markShrinkageDonated(Long shrinkageId) {
+        var query = new GetShrinkageByIdQuery(new ShrinkageId(shrinkageId));
+        var shrinkage = shrinkageQueryService.handle(query);
+        if (shrinkage.isEmpty()) {
             return false;
         }
-        mermaCommandService.handle(new MarkShrinkageDonatedCommand(new ShrinkageId(mermaId)));
+        shrinkageCommandService.handle(new MarkShrinkageDonatedCommand(new ShrinkageId(shrinkageId)));
         return true;
     }
 }

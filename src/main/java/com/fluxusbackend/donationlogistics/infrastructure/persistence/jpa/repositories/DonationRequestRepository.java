@@ -13,13 +13,13 @@ public interface DonationRequestRepository extends JpaRepository<DonationRequest
     @Query("select s from DonationRequest s where s.beneficiaryReferenceId.value = :beneficiaryId")
     List<DonationRequest> findByBeneficiaryId(@Param("beneficiaryId") Long beneficiaryId);
 
-    @Query("select s from DonationRequest s where s.mermaReferenceId.value = :mermaId")
-    List<DonationRequest> findByMermaId(@Param("mermaId") Long mermaId);
+    @Query("select s from DonationRequest s where s.shrinkageReferenceId.value = :shrinkageId")
+    List<DonationRequest> findByShrinkageId(@Param("shrinkageId") Long shrinkageId);
 
     @Query("select s from DonationRequest s where s.companyId.value = :companyId")
     List<DonationRequest> findByCompanyId(@Param("companyId") Long companyId);
 
-    @Query("select s from DonationRequest s, Shrinkage m where s.mermaReferenceId.value = m.id and m.name = :productName")
+    @Query("select s from DonationRequest s, Shrinkage m where s.shrinkageReferenceId.value = m.id and m.name = :productName")
     List<DonationRequest> findByProductName(@Param("productName") String productName);
 }
 
