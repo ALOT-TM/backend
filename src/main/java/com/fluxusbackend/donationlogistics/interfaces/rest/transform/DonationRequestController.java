@@ -24,6 +24,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -35,6 +36,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/api/requests")
@@ -64,9 +66,21 @@ public class DonationRequestController {
                     content = @Content(schema = @Schema(implementation = DonationRequest.class))),
             @ApiResponse(responseCode = "403", description = "Access denied", content = @Content)
     })
-    public DonationRequest create(@Valid @RequestBody CreateDonationRequestCommand command) {
+    public DonationRequest create(@Valid @RequestBody CreateDonationRequestPayload payload) {
         authorizationService.requireActor(UserActor.BENEFICIARY);
-        return commandService.handle(command);
+        var beneficiaryId = authorizationService.getCurrentBeneficiaryInstitutionId();
+        if (beneficiaryId == null) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Beneficiary id missing");
+        }
+        var normalized = new CreateDonationRequestCommand(
+                payload.mermaId(),
+                beneficiaryId,
+                payload.notes()
+        );
+        return commandService.handle(normalized);
+    }
+
+    public record CreateDonationRequestPayload(@NotNull Long mermaId, String notes) {
     }
 
     @GetMapping("/{requestId}")

@@ -69,7 +69,7 @@ Flujo principal:
 
 Este repositorio está en un estado funcional y compilable. Cambios principales implementados y activos en el códigobase:
 
-- **Autenticación JWT**: `JwtTokenService` y `JwtAuthenticationFilter` con HMAC-SHA256. Login emite JWT con `userId`, `email`, `companyId` y `role`.
+- **Autenticación JWT**: `JwtTokenService` y `JwtAuthenticationFilter` con HMAC-SHA256. Login emite JWT con `userId`, `email`, `companyId`, `beneficiaryInstitutionId`, `actor` y `role`.
 - **Swagger UI con JWT**: `OpenApiConfig` configura autenticación Bearer en Swagger (candado 🔒 en endpoints protegidos).
 - **Sin formulario de login**: `SecurityConfig` deshabilita form login y HTTP Basic. Solo API REST.
 - **Seguridad stateless**: `SessionCreationPolicy.STATELESS` + JWT validation en cada request.
@@ -77,11 +77,26 @@ Este repositorio está en un estado funcional y compilable. Cambios principales 
 - **MySQL persistencia**: Base de datos `fluxus` con auto-creación de esquema. DDL mode `update`.
 - `AuthenticatedUserPrincipal` y `CurrentUserProvider` exponen usuario desde `SecurityContext`.
 - `Company` aggregate para representar empresas retail.
-- Endpoint `GET /api/iam/profile` expone perfil del usuario autenticado.
+- Endpoint `GET /api/auth/profile` expone perfil del usuario autenticado.
+- **Auditoria de cambios de estado**: se registra en `status_change_logs` con usuario y timestamp.
+  - `GET /api/audit/status-changes` (filtros: `entityType`, `entityId`, `userId`)
+  - `GET /api/audit/status-changes/{entityType}/{entityId}`
+
+Ejemplos cURL:
+
+```bash
+curl -X GET "http://localhost:8080/api/audit/status-changes?entityType=SHRINKAGE&entityId=1" \
+  -H "Authorization: Bearer <token>"
+```
+
+```bash
+curl -X GET "http://localhost:8080/api/audit/status-changes?userId=1" \
+  -H "Authorization: Bearer <token>"
+```
 - **Company endpoints públicos** (sin JWT):
-  - `POST /api/companies` - Crear compañía
-  - `GET /api/companies` - Listar compañías
-  - `GET /api/companies/{companyId}` - Obtener compañía por id
+  - `POST /api/retail-companies` - Crear compañía
+  - `GET /api/retail-companies` - Listar compañías
+  - `GET /api/retail-companies/{companyId}` - Obtener compañía por id
 - **Nuevos endpoints**:
   - `GET /api/donations/statistics` - Estadísticas de donaciones por beneficiario (manager only)
   - `GET /api/requests/company` - Listado de requests de la compañía (manager only)
@@ -231,6 +246,8 @@ Reglas clave:
     delivery_date, reception_date, reception_comment, status, company_id, created_at, updated_at
 - `donation_requests`
   - id, merma_id, beneficiary_id, status, notes, company_id, created_at, updated_at
+- `status_change_logs`
+  - id, entity_type, entity_id, from_status, to_status, changed_by_user_id, changed_at
 - `beneficiaries`
   - id, beneficiary_name, type, address, status, created_at, updated_at
 - `beneficiary_accepted_products`
@@ -295,7 +312,7 @@ La app **no tiene formulario de login** en la web. La autenticación es **JWT ba
 
 1. **Registrar usuario** (sin auth requerida):
    ```bash
-   curl -X POST http://localhost:8080/api/iam/register \
+  curl -X POST http://localhost:8080/api/auth/register \
      -H "Content-Type: application/json" \
      -d '{
        "email": "user@test.com",
@@ -307,7 +324,7 @@ La app **no tiene formulario de login** en la web. La autenticación es **JWT ba
 
    Beneficiario (sin compañia):
    ```bash
-   curl -X POST http://localhost:8080/api/iam/register \
+  curl -X POST http://localhost:8080/api/auth/register \
      -H "Content-Type: application/json" \
      -d '{
        "email": "beneficiary@test.com",
@@ -319,7 +336,7 @@ La app **no tiene formulario de login** en la web. La autenticación es **JWT ba
 
 2. **Hacer login** (obtener JWT token):
    ```bash
-   curl -X POST http://localhost:8080/api/iam/login \
+  curl -X POST http://localhost:8080/api/auth/login \
      -H "Content-Type: application/json" \
      -d '{"email": "user@test.com", "rawPassword": "pass123"}'
    ```
@@ -344,17 +361,18 @@ La app **no tiene formulario de login** en la web. La autenticación es **JWT ba
 
 4. **Usar en requests manuales**:
    ```bash
-   curl -H "Authorization: Bearer <token>" \
-        http://localhost:8080/api/iam/profile
+     curl -H "Authorization: Bearer <token>" \
+       http://localhost:8080/api/auth/profile
    ```
 
 ### Seguridad
 
 - **Login form deshabilitado**: `@Configuration(proxyBeanMethods=false)` + `.formLogin(form -> form.disable())`
 - **HTTP Basic deshabilitado**: `.httpBasic(basic -> basic.disable())`
-- **JWT required**: todos los endpoints excepto `/api/iam/register`, `/api/iam/login`, `/api/companies/**` y Swagger docs
+- **JWT required**: todos los endpoints excepto `/api/auth/register`, `/api/auth/login`, `/api/retail-companies/**` y Swagger docs
 - **Session stateless**: `SessionCreationPolicy.STATELESS`
 - **CORS enabled**: permite `http://localhost:5173` (configurado en `WebConfig`)
+- **CompanyId en escrituras**: operaciones de registro/modificacion usan `companyId` del token; algunos GETs aceptan `companyId` pero se valida contra el token.
 
 ## Estados y enums
 
@@ -370,23 +388,22 @@ UserStatus: `ACTIVE`, `INACTIVE`
 ## Endpoints (mapa rapido)
 
 Merma:
-- `POST /api/mermas/register`
-- `PATCH /api/mermas/{mermaId}/donable`
-- `PATCH /api/mermas/{mermaId}/not-donable`
-- `PATCH /api/mermas/{mermaId}/donated`
-- `GET /api/mermas/{mermaId}`
-- `GET /api/mermas?status=REGISTERED|DONABLE|IN_PROCESS|DONATED|NOT_DONABLE`
-- `GET /api/mermas/donable?companyId=X`
-- `GET /api/mermas/company`
+- `POST /api/shrinkages`
+- `PATCH /api/shrinkages/{shrinkageId}/donable`
+- `PATCH /api/shrinkages/{shrinkageId}/not-donable`
+- `PATCH /api/shrinkages/{shrinkageId}/donated`
+- `GET /api/shrinkages/{shrinkageId}`
+- `GET /api/shrinkages?status=REGISTERED|DONABLE|IN_PROCESS|DONATED|NOT_DONABLE&companyId=X`
+- `GET /api/shrinkages/donable?companyId=X`
+- `GET /api/shrinkages/company`
+- Beneficiarios: solo pueden leer mermas en estado `DONABLE`.
 
 Beneficiarios:
-- `POST /api/beneficiaries/register`
-- `PUT /api/beneficiaries/{beneficiaryId}`
-- `PATCH /api/beneficiaries/{beneficiaryId}/activate`
-- `PATCH /api/beneficiaries/{beneficiaryId}/deactivate`
-- `GET /api/beneficiaries/{beneficiaryId}`
-- `GET /api/beneficiaries?status=ACTIVE|INACTIVE`
-- `beneficiaries` no lleva `company_id` en el modelo actual.
+- `POST /api/beneficiary-institutions`
+- `PUT /api/beneficiary-institutions/{beneficiaryId}`
+- `GET /api/beneficiary-institutions/{beneficiaryId}`
+- `GET /api/beneficiary-institutions`
+- `beneficiary_institutions` no lleva `company_id` en el modelo actual.
 
 Donaciones:
 - `POST /api/donations/create`
@@ -398,7 +415,7 @@ Donaciones:
 - `GET /api/donations/statistics` (devuelve cantidad de donaciones por beneficiario - manager only)
 
 Donation Requests:
-- `POST /api/requests` (beneficiary creates a request for a donable merma)
+- `POST /api/requests` (beneficiary creates a request for a donable merma; `beneficiaryId` se obtiene del token)
 - `GET /api/requests/{requestId}` (gets a request by id)
 - `GET /api/requests?beneficiaryId=X` (lists a beneficiary's requests)
 - `GET /api/requests/merma/{mermaId}` (lists requests for a merma - manager only)
@@ -409,25 +426,25 @@ Donation Requests:
 - `GET /api/requests/product/{productName}` (lists requests by merma product name - manager only)
 
 Companies (public, no JWT):
-- `POST /api/companies`
-- `GET /api/companies`
-- `GET /api/companies/{companyId}`
+- `POST /api/retail-companies`
+- `GET /api/retail-companies`
+- `GET /api/retail-companies/{companyId}`
 
 IAM:
-- `POST /api/iam/register`
-- `POST /api/iam/login`
-- `GET /api/iam/profile` (devuelve `companyId`, `email`, `role` del usuario autenticado)
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `GET /api/auth/profile` (devuelve `companyId`, `email`, `role` del usuario autenticado)
 
 Seguridad:
 - Las rutas protegidas requieren `Authorization: Bearer <jwt>`.
-- El JWT contiene `userId`, `email`, `companyId` y `role`.
-- Las rutas `/api/companies/**` son publicas y no requieren token.
+- El JWT contiene `userId`, `email`, `companyId`, `beneficiaryInstitutionId`, `actor` y `role`.
+- Las rutas `/api/retail-companies/**` son publicas y no requieren token.
 
 ## Ejemplos rapidos por contexto
 
 Merma (registrar y marcar donable):
 ```http
-POST /api/mermas/register
+POST /api/shrinkages
 Content-Type: application/json
 
 {
@@ -439,12 +456,12 @@ Content-Type: application/json
 }
 ```
 ```http
-PATCH /api/mermas/1/donable
+PATCH /api/shrinkages/1/donable
 ```
 
 Beneficiarios (registrar y desactivar):
 ```http
-POST /api/beneficiaries/register
+POST /api/beneficiary-institutions
 Content-Type: application/json
 
 {
@@ -455,7 +472,7 @@ Content-Type: application/json
 }
 ```
 ```http
-PATCH /api/beneficiaries/1/deactivate
+PUT /api/beneficiary-institutions/1
 ```
 
 Donaciones (crear y confirmar):
@@ -488,7 +505,6 @@ Authorization: Bearer <token>
 
 {
   "mermaId": 1,
-  "beneficiaryId": 1,
   "notes": "Necesitamos urgente para los niños"
 }
 ```
@@ -524,7 +540,7 @@ Authorization: Bearer <token>
 
 Company (crear sin login):
 ```http
-POST /api/companies
+POST /api/retail-companies
 Content-Type: application/json
 
 {
@@ -569,7 +585,7 @@ Authorization: Bearer <token>
 ```
 IAM (registro y login):
 ```http
-POST /api/iam/register
+POST /api/auth/register
 Content-Type: application/json
 
 {
@@ -581,7 +597,7 @@ Content-Type: application/json
 ```
 
 ```http
-POST /api/iam/register
+POST /api/auth/register
 Content-Type: application/json
 
 {
@@ -593,7 +609,7 @@ Content-Type: application/json
 ```
 
 ```http
-POST /api/iam/login
+POST /api/auth/login
 Content-Type: application/json
 
 {
@@ -623,7 +639,7 @@ Obtén la información del usuario autenticado (`companyId`, `email`, `role`).
 Request:
 
 ```http
-GET /api/iam/profile
+GET /api/auth/profile
 Authorization: Bearer <token>
 ```
 
@@ -640,51 +656,51 @@ Response (200):
 Ejemplo cURL:
 
 ```bash
-curl -X GET http://localhost:8080/api/iam/profile \
+curl -X GET http://localhost:8080/api/auth/profile \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9..."
 ```
 ## Endpoints de usuario (IAM)
 
 Se agregaron endpoints para consultar cuentas de usuario y listas filtradas por rol. Estos endpoints requieren un token JWT válido en el header `Authorization: Bearer <token>`, pero no validan *quién* realiza la consulta — cualquier usuario autenticado puede leerlos.
 
-- `GET /api/iam/users/{userId}` — Devuelve la cuenta solicitada. Respuesta segura (`UserAccountDto`) con campos: `id`, `email`, `companyId` (nullable), `role`, `status`. Bajo ningún concepto se devuelve `passwordHash`.
-- `GET /api/iam/users?role=MANAGER|BENEFICIARY` — Lista usuarios filtrados por rol. Si no se especifica `role` devuelve todos los usuarios (respuesta: array de `UserAccountDto`).
+- `GET /api/auth/users/{userId}` — Devuelve la cuenta solicitada. Respuesta segura (`UserAccountDto`) con campos: `id`, `email`, `companyId` (nullable), `role`, `status`. Bajo ningún concepto se devuelve `passwordHash`.
+- `GET /api/auth/users?role=MANAGER|BENEFICIARY` — Lista usuarios filtrados por rol. Si no se especifica `role` devuelve todos los usuarios (respuesta: array de `UserAccountDto`).
 
 Ejemplos:
 
 ```bash
-curl -X GET http://localhost:8080/api/iam/users/1 \
+curl -X GET http://localhost:8080/api/auth/users/1 \
   -H "Authorization: Bearer <token>"
 ```
 
 ```bash
-curl -X GET "http://localhost:8080/api/iam/users?role=BENEFICIARY" \
+curl -X GET "http://localhost:8080/api/auth/users?role=BENEFICIARY" \
   -H "Authorization: Bearer <token>"
 ```
 
 Nota: la implementación usa DTOs para evitar exponer `passwordHash` accidentalmente desde la entidad JPA.
 
 Notas:
-- El endpoint requiere autenticación; usa el token devuelto por `/api/iam/login`.
+- El endpoint requiere autenticación; usa el token devuelto por `/api/auth/login`.
 - Si el usuario no tiene `companyId` (por ejemplo, un beneficiario), el valor puede ser `null`.
 
 ## Ejemplos cURL (flujo completo)
 
 1) Registrar merma:
 ```bash
-curl -X POST http://localhost:8080/api/mermas/register \
+curl -X POST http://localhost:8080/api/shrinkages \
   -H "Content-Type: application/json" \
   -d '{"productName":"Yogurt Natural","categoryName":"Lacteos","quantity":12,"expirationDate":"2026-05-10","reason":"EXPIRATION"}'
 ```
 
 2) Marcar merma como donable:
 ```bash
-curl -X PATCH http://localhost:8080/api/mermas/1/donable
+curl -X PATCH http://localhost:8080/api/shrinkages/1/donable
 ```
 
 3) Registrar beneficiario:
 ```bash
-curl -X POST http://localhost:8080/api/beneficiaries/register \
+curl -X POST http://localhost:8080/api/beneficiary-institutions \
   -H "Content-Type: application/json" \
   -d '{"name":"Colegio San Juan","type":"SCHOOL","address":"Av. Principal 123","acceptedProducts":["Lacteos","Conservas"]}'
 ```
@@ -799,7 +815,7 @@ Nota: la seguridad por roles no esta implementada aun (ver Limitaciones).
 ## Catalogo de requests (todas las operaciones)
 
 Merma:
-- Register (`POST /api/mermas/register`):
+- Register (`POST /api/shrinkages`):
 ```json
 {
   "productName": "Yogurt Natural",
@@ -809,12 +825,12 @@ Merma:
   "reason": "EXPIRATION"
 }
 ```
-- Donable (`PATCH /api/mermas/{mermaId}/donable`): sin body.
-- Not Donable (`PATCH /api/mermas/{mermaId}/not-donable`): sin body.
-- Donated (`PATCH /api/mermas/{mermaId}/donated`): sin body.
+- Donable (`PATCH /api/shrinkages/{shrinkageId}/donable`): sin body.
+- Not Donable (`PATCH /api/shrinkages/{shrinkageId}/not-donable`): sin body.
+- Donated (`PATCH /api/shrinkages/{shrinkageId}/donated`): sin body.
 
 Beneficiarios:
-- Register (`POST /api/beneficiaries/register`):
+- Register (`POST /api/beneficiary-institutions`):
 ```json
 {
   "name": "Colegio San Juan",
@@ -823,7 +839,7 @@ Beneficiarios:
   "acceptedProducts": ["Lacteos", "Conservas"]
 }
 ```
-- Update (`PUT /api/beneficiaries/{beneficiaryId}`):
+- Update (`PUT /api/beneficiary-institutions/{beneficiaryId}`):
 ```json
 {
   "name": "Colegio San Juan",
@@ -832,7 +848,7 @@ Beneficiarios:
   "acceptedProducts": ["Lacteos", "Conservas", "Granos"]
 }
 ```
-- Activate/Deactivate (`PATCH /api/beneficiaries/{beneficiaryId}/activate|deactivate`): sin body.
+- List (`GET /api/beneficiary-institutions`): sin body.
 
 Donaciones:
 - Create (`POST /api/donations/create`):
@@ -859,7 +875,7 @@ Donaciones:
 ```
 
 IAM:
-- Register (`POST /api/iam/register`):
+- Register (`POST /api/auth/register`):
   - `MANAGER`: `companyId` obligatorio.
   - `BENEFICIARY`: `companyId` debe ser `null` o omitido.
 ```json
@@ -879,7 +895,7 @@ IAM:
   "companyId": null
 }
 ```
-- Login (`POST /api/iam/login`):
+- Login (`POST /api/auth/login`):
 ```json
 {
   "email": "admin@retail.com",
@@ -888,15 +904,15 @@ IAM:
 ```
 
 Companies (public, no JWT):
-- Create (`POST /api/companies`):
+- Create (`POST /api/retail-companies`):
 ```json
 {
   "name": "Retail Norte SAC",
   "headquarters": "Lima"
 }
 ```
-- List (`GET /api/companies`): sin body.
-- Get by id (`GET /api/companies/{companyId}`): sin body.
+- List (`GET /api/retail-companies`): sin body.
+- Get by id (`GET /api/retail-companies/{companyId}`): sin body.
 
 ## Supuestos del proyecto
 

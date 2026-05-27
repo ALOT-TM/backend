@@ -8,6 +8,7 @@ import com.fluxusbackend.donationlogistics.domain.model.commands.CreateDonationC
 import com.fluxusbackend.donationlogistics.domain.model.commands.MarkDonationDeliveredCommand;
 import com.fluxusbackend.donationlogistics.domain.services.DonationCommandService;
 import com.fluxusbackend.donationlogistics.infrastructure.persistence.jpa.repositories.DonationRepository;
+import com.fluxusbackend.shared.application.audit.StatusChangeLogService;
 import jakarta.transaction.Transactional;
 import java.util.NoSuchElementException;
 import org.springframework.stereotype.Service;
@@ -19,17 +20,20 @@ public class DonationCommandServiceImpl implements DonationCommandService {
     private final ExternalMermaService externalMermaService;
     private final ExternalBeneficiaryService externalBeneficiaryService;
     private final com.fluxusbackend.shared.application.security.AclService aclService;
+    private final StatusChangeLogService statusChangeLogService;
 
     public DonationCommandServiceImpl(
             DonationRepository repository,
             ExternalMermaService externalMermaService,
             ExternalBeneficiaryService externalBeneficiaryService,
-            com.fluxusbackend.shared.application.security.AclService aclService
+            com.fluxusbackend.shared.application.security.AclService aclService,
+            StatusChangeLogService statusChangeLogService
     ) {
         this.repository = repository;
         this.externalMermaService = externalMermaService;
         this.externalBeneficiaryService = externalBeneficiaryService;
         this.aclService = aclService;
+        this.statusChangeLogService = statusChangeLogService;
     }
 
     @Override
@@ -54,7 +58,14 @@ public class DonationCommandServiceImpl implements DonationCommandService {
             throw new SecurityException("Merma does not belong to the current user's company");
         }
         donation.setCompanyId(companyId);
-        return repository.save(donation);
+        var saved = repository.save(donation);
+        statusChangeLogService.recordChange(
+                "DONATION",
+                saved.getDonationId().value(),
+                null,
+                saved.getStatus().name()
+        );
+        return saved;
     }
 
     @Override
@@ -63,8 +74,16 @@ public class DonationCommandServiceImpl implements DonationCommandService {
         var donation = repository.findById(command.donationId().value())
                 .orElseThrow(() -> new NoSuchElementException("Donation not found"));
         aclService.ensureSameCompanyForRetail(donation);
+        var fromStatus = donation.getStatus();
         donation.markDelivered(command.deliveryDate());
-        return repository.save(donation);
+        var saved = repository.save(donation);
+        statusChangeLogService.recordChange(
+            "DONATION",
+            saved.getDonationId().value(),
+            fromStatus.name(),
+            saved.getStatus().name()
+        );
+        return saved;
     }
 
     @Override
@@ -73,12 +92,19 @@ public class DonationCommandServiceImpl implements DonationCommandService {
         var donation = repository.findById(command.donationId().value())
                 .orElseThrow(() -> new NoSuchElementException("Donation not found"));
         aclService.ensureSameCompanyForRetail(donation);
+        var fromStatus = donation.getStatus();
         donation.confirmReception(command.receptionDate(), command.comment());
         repository.save(donation);
         var updated = externalMermaService.markMermaDonated(donation.getMermaReferenceId().value());
         if (!updated) {
             throw new IllegalStateException("Unable to mark merma as donated");
         }
+        statusChangeLogService.recordChange(
+                "DONATION",
+                donation.getDonationId().value(),
+                fromStatus.name(),
+                donation.getStatus().name()
+        );
         return donation;
     }
 }

@@ -34,6 +34,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/api/shrinkages")
@@ -114,9 +115,21 @@ public class ShrinkageController {
             @ApiResponse(responseCode = "403", description = "Access denied", content = @Content)
     })
     public Shrinkage getById(@PathVariable Long shrinkageId) {
-        authorizationService.requireActor(UserActor.RETAIL);
-        return queryService.handle(new GetShrinkageByIdQuery(new ShrinkageId(shrinkageId)))
+                authorizationService.requireActor(UserActor.RETAIL, UserActor.BENEFICIARY);
+        var shrinkage = queryService.handle(new GetShrinkageByIdQuery(new ShrinkageId(shrinkageId)))
                 .orElseThrow(() -> new IllegalArgumentException("Shrinkage not found"));
+                if (authorizationService.getCurrentUserActor() == UserActor.BENEFICIARY) {
+                        if (shrinkage.getStatus() != ShrinkageStatus.DONABLE) {
+                                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Shrinkage not available");
+                        }
+                        return shrinkage;
+                }
+                var currentCompany = authorizationService.getCurrentUserCompanyId();
+                var shrinkageCompany = shrinkage.getCompanyId().map(CompanyId::value).orElse(null);
+                if (shrinkageCompany == null || !shrinkageCompany.equals(currentCompany.value())) {
+                        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Company mismatch");
+                }
+        return shrinkage;
     }
 
     @GetMapping
@@ -126,9 +139,25 @@ public class ShrinkageController {
                     content = @Content(schema = @Schema(implementation = Shrinkage.class))),
             @ApiResponse(responseCode = "403", description = "Access denied", content = @Content)
     })
-    public List<Shrinkage> listByStatus(@RequestParam ShrinkageStatus status) {
-        authorizationService.requireActor(UserActor.RETAIL);
-        return queryService.handle(new ListShrinkagesByStatusQuery(status));
+        public List<Shrinkage> listByStatus(
+                        @RequestParam ShrinkageStatus status,
+                        @RequestParam(required = false) Long companyId
+        ) {
+                authorizationService.requireActor(UserActor.RETAIL, UserActor.BENEFICIARY);
+                if (authorizationService.getCurrentUserActor() == UserActor.BENEFICIARY) {
+                        if (status != ShrinkageStatus.DONABLE) {
+                                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Status not available");
+                        }
+                        return queryService.handle(new ListShrinkagesByStatusQuery(ShrinkageStatus.DONABLE));
+                }
+                var currentCompany = authorizationService.getCurrentUserCompanyId();
+                if (companyId != null && !companyId.equals(currentCompany.value())) {
+                        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Company mismatch");
+                }
+                var resolvedCompanyId = companyId == null ? currentCompany : new CompanyId(companyId);
+                return queryService.handle(new ListShrinkagesByCompanyQuery(resolvedCompanyId)).stream()
+                                .filter(shrinkage -> shrinkage.getStatus() == status)
+                                .toList();
     }
 
     @GetMapping("/company")
@@ -151,9 +180,11 @@ public class ShrinkageController {
             return queryService.handle(new ListShrinkagesByStatusQuery(ShrinkageStatus.DONABLE));
         }
 
-        var resolvedCompanyId = companyId == null
-                ? authorizationService.getCurrentUserCompanyId()
-                : new CompanyId(companyId);
+                var currentCompany = authorizationService.getCurrentUserCompanyId();
+                if (companyId != null && !companyId.equals(currentCompany.value())) {
+                        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Company mismatch");
+                }
+                var resolvedCompanyId = companyId == null ? currentCompany : new CompanyId(companyId);
         return queryService.handle(new ListShrinkagesByCompanyQuery(resolvedCompanyId)).stream()
                 .filter(shrinkage -> shrinkage.getStatus() == ShrinkageStatus.DONABLE)
                 .toList();
