@@ -25,9 +25,6 @@ public record RegisterUserCommand(
             if (retailCompanyId == null || retailCompanyId <= 0) {
                 throw new IllegalArgumentException("Retail company id is required for RETAIL users");
             }
-            if (roleId == null || roleId <= 0) {
-                throw new IllegalArgumentException("Role id is required for RETAIL users");
-            }
             if (beneficiaryInstitutionId != null) {
                 throw new IllegalArgumentException("Beneficiary institution id must be null for RETAIL users");
             }

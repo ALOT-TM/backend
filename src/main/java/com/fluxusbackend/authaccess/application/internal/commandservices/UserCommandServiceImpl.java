@@ -1,12 +1,17 @@
 package com.fluxusbackend.authaccess.application.internal.commandservices;
 
 import com.fluxusbackend.authaccess.domain.model.aggregates.BeneficiaryUser;
+import com.fluxusbackend.authaccess.domain.model.aggregates.Permission;
 import com.fluxusbackend.authaccess.domain.model.aggregates.RetailUser;
+import com.fluxusbackend.authaccess.domain.model.aggregates.Role;
+import com.fluxusbackend.authaccess.domain.model.aggregates.RolePermission;
 import com.fluxusbackend.authaccess.domain.model.aggregates.UserAccount;
 import com.fluxusbackend.authaccess.domain.model.commands.RegisterUserCommand;
 import com.fluxusbackend.authaccess.domain.model.enums.UserActor;
 import com.fluxusbackend.authaccess.domain.model.valueobjects.PasswordHash;
 import com.fluxusbackend.authaccess.domain.services.UserCommandService;
+import com.fluxusbackend.authaccess.infrastructure.persistence.jpa.repositories.PermissionRepository;
+import com.fluxusbackend.authaccess.infrastructure.persistence.jpa.repositories.RolePermissionRepository;
 import com.fluxusbackend.authaccess.infrastructure.persistence.jpa.repositories.RoleRepository;
 import com.fluxusbackend.authaccess.infrastructure.persistence.jpa.repositories.UserAccountRepository;
 import com.fluxusbackend.beneficiary.infrastructure.persistence.jpa.repositories.BeneficiaryInstitutionRepository;
@@ -23,18 +28,24 @@ public class UserCommandServiceImpl implements UserCommandService {
     private final RetailCompanyRepository retailCompanyRepository;
     private final RoleRepository roleRepository;
     private final BeneficiaryInstitutionRepository beneficiaryInstitutionRepository;
+    private final PermissionRepository permissionRepository;
+    private final RolePermissionRepository rolePermissionRepository;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
     public UserCommandServiceImpl(
             UserAccountRepository repository,
             RetailCompanyRepository retailCompanyRepository,
             RoleRepository roleRepository,
-            BeneficiaryInstitutionRepository beneficiaryInstitutionRepository
+            BeneficiaryInstitutionRepository beneficiaryInstitutionRepository,
+            PermissionRepository permissionRepository,
+            RolePermissionRepository rolePermissionRepository
     ) {
         this.repository = repository;
         this.retailCompanyRepository = retailCompanyRepository;
         this.roleRepository = roleRepository;
         this.beneficiaryInstitutionRepository = beneficiaryInstitutionRepository;
+        this.permissionRepository = permissionRepository;
+        this.rolePermissionRepository = rolePermissionRepository;
     }
 
     @Override
@@ -50,11 +61,7 @@ public class UserCommandServiceImpl implements UserCommandService {
         if (command.actor() == UserActor.RETAIL) {
             var company = retailCompanyRepository.findById(command.retailCompanyId())
                     .orElseThrow(() -> new NoSuchElementException("Retail company not found"));
-            var role = roleRepository.findById(command.roleId())
-                    .orElseThrow(() -> new NoSuchElementException("Role not found"));
-            if (!role.getRetailCompany().getRetailCompanyId().equals(company.getRetailCompanyId())) {
-                throw new IllegalArgumentException("Role does not belong to the retail company");
-            }
+            var role = resolveDefaultRetailRole(company);
             var retailUser = new RetailUser(user, company, role, true);
             user.attachRetailUser(retailUser);
         } else {
@@ -66,6 +73,24 @@ public class UserCommandServiceImpl implements UserCommandService {
 
         return repository.save(user);
     }
+
+    private Role resolveDefaultRetailRole(com.fluxusbackend.companyretail.domain.model.aggregates.RetailCompany company) {
+        var role = roleRepository.findFirstByRetailCompany_Id(company.getRetailCompanyId())
+                .orElseGet(() -> roleRepository.save(new Role(company, "RETAIL_FULL_ACCESS")));
+        ensureRoleHasAllPermissions(role);
+        return role;
+    }
+
+    private void ensureRoleHasAllPermissions(Role role) {
+        var permissions = permissionRepository.findAll();
+        if (permissions.isEmpty()) {
+            var defaultPermission = new Permission((short) 1, "FULL_ACCESS");
+            permissions = java.util.List.of(permissionRepository.save(defaultPermission));
+        }
+        for (Permission permission : permissions) {
+            if (!rolePermissionRepository.existsByRoleAndPermission(role, permission)) {
+                rolePermissionRepository.save(new RolePermission(role, permission));
+            }
+        }
+    }
 }
-
-

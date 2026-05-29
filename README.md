@@ -122,146 +122,287 @@ Patrones aplicados:
 
 ## Bounded Contexts (responsabilidades y limites)
 
-### Merma Management
+### 1. Shrinkage Management (Gestión de Merma)
+
 Responsabilidad: registrar y clasificar productos en merma (estado, motivo, vencimiento).
 
-- Aggregate Root: `Merma`
-- Value Objects: `MermaId`, `ProductName`, `CategoryName`, `Quantity`, `ExpirationDate`
-- Enums: `MermaStatus`, `MermaReason`
-- Commands: `RegisterMermaCommand`, `MarkMermaDonableCommand`, `MarkMermaNotDonableCommand`, `MarkMermaDonatedCommand`
-- Queries: `GetMermaByIdQuery`, `ListMermasByStatusQuery`
-- Eventos: `MermaRegisteredEvent`
-- Repositorio: `MermaRepository`
-- Servicios: `MermaCommandService`, `MermaQueryService`
-- ACL (provider): `MermaContextFacade` (expuesto a Donations)
+- Aggregate Roots: `Shrinkage`, `ShrinkageReason`, `Category`
+- Tablas: `shrinkage`, `shrinkage_reason`, `category`, `shrinkage_log`
+- Enums: `ShrinkageStatus` (REGISTERED, DONABLE, IN_PROCESS, DONATED, NOT_DONABLE)
+- Repositorios: JPA repositories para cada entidad
+- Servicios: Command y Query services
+- Integración: Expone ACL para que Donations Management pueda consultar mermas donables
 
-Regla clave:
-- La donacion inicia en `ASSIGNED`.
-- Solo una donacion `ASSIGNED` puede pasar a `DELIVERED`.
-- Solo una donacion `DELIVERED` puede pasar a `CONFIRMED`.
-- Al confirmar recepcion se marca la merma como `DONATED` via ACL.
-- Las operaciones retail quedan aisladas por `companyId`.
-### Donations Management
+Reglas clave:
+- La merma inicia en `REGISTERED`
+- Puede ser clasificada como `DONABLE` (apta para donación) o `NOT_DONABLE`
+- Al asignar donación, pasa a `IN_PROCESS`
+- Al confirmar recepción de donación, pasa a `DONATED`
+- Las mermas están asociadas a `company_id` para aislamiento multi-tenant
+
+### 2. Donation Logistics Management (Logística de Donaciones)
+
 Responsabilidad: coordinar donaciones a partir de mermas donables y beneficiarios activos.
 
-- Aggregate Root: `Donation`
-- Value Objects: `DonationId`, `MermaReferenceId`, `BeneficiaryReferenceId`, `DonationQuantity`,
-  `ScheduledDeliveryDate`, `DeliveryDate`, `ReceptionDate`
-- Enum: `DonationStatus`
-- Commands: `CreateDonationCommand`, `MarkDonationDeliveredCommand`, `ConfirmDonationReceptionCommand`
-- Queries: `GetDonationByIdQuery`, `ListDonationsByStatusQuery`, `ListDonationsByBeneficiaryQuery`
-- Eventos: `DonationAssignedEvent`, `DonationConfirmedEvent`
-- Repositorio: `DonationRepository`
-- Servicios: `DonationCommandService`, `DonationQueryService`
-- ACL (consumer): `ExternalMermaService`, `ExternalBeneficiaryService`
+- Aggregate Roots: `Donation`, `DonationItem`, `DonationRequest`
+- Tablas: `donations`, `donation_items`, `donation_requests`
+- Enums: 
+  - `DonationStatus`: ASSIGNED, DELIVERED, CONFIRMED
+  - `DonationItemStatus`: ASSIGNED, DELIVERED, CONFIRMED, CANCELLED
+  - `DonationRequestStatus`: PENDING, ACCEPTED, REJECTED, CANCELLED, COMPLETED
+- Repositorios: `DonationRepository`, `DonationItemRepository`, `DonationRequestRepository`
+- Servicios: Command y Query services para cada entidad
+- Endpoints: `/api/donations/**`, `/api/requests/**`
 
 Reglas clave:
-- La donacion inicia en `ASSIGNED`.
-- Solo una donacion `ASSIGNED` puede pasar a `DELIVERED`.
-- Solo una donacion `DELIVERED` puede pasar a `CONFIRMED`.
-- Al confirmar recepcion se marca la merma como `DONATED` via ACL.
+- Una donación inicia en `ASSIGNED`
+- Transiciones: ASSIGNED → DELIVERED → CONFIRMED
+- Una `DonationRequest` (solicitud de beneficiario) inicia en `PENDING`
+- Manager puede ACCEPT o REJECT requests
+- Beneficiarios pueden CANCEL sus requests
+- Cada donación contiene múltiples `DonationItem` (items de distintas mermas)
+- Las donaciones están asociadas a `company_id`
 
-### Donation Requests (within Donations Management)
-Responsabilidad: permitir que los beneficiarios reclamen mermas donables y notificar al manager de retail.
+### 3. Beneficiary Management (Gestión de Beneficiarios)
 
-- Aggregate Root: `DonationRequest`
-- Value Objects: `DonationRequestId`, `MermaReferenceId`, `BeneficiaryReferenceId`
-- Enum: `DonationRequestStatus`
-- Commands: `CreateDonationRequestCommand`, `AcceptDonationRequestCommand`, `RejectDonationRequestCommand`, `CancelDonationRequestCommand`
-- Queries: `GetDonationRequestByIdQuery`, `ListDonationRequestsByBeneficiaryQuery`, `ListDonationRequestsByMermaQuery`
-- Repository: `DonationRequestRepository`
-- Services: `DonationRequestCommandService`, `DonationRequestQueryService`
-- Endpoint: `/api/requests`
+Responsabilidad: administrar instituciones beneficiarias, tipos y ubicaciones.
 
-Reglas:
-- Una solicitud comienza en `PENDING`.
-- Un manager puede `ACCEPT` o `REJECT` una solicitud.
-- Un beneficiario puede `CANCEL` una solicitud si está en `PENDING` o `ACCEPTED`.
-- Una solicitud se marca como `COMPLETED` una vez alcanza ese estado luego de ser aceptada.
-- Una merma donable puede tener múltiples solicitudes de diferentes beneficiarios.
-- Cuando el manager procesa una solicitud, la merma pasa a `IN_PROCESS` para evitar nuevas asignaciones.
-
-### Beneficiaries Management
-Responsabilidad: administrar instituciones beneficiarias y su disponibilidad.
-
-- Aggregate Root: `Beneficiary`
-- Value Objects: `BeneficiaryId`, `BeneficiaryName`, `Address`, `AcceptedProduct`
-- Enums: `BeneficiaryType`, `BeneficiaryStatus`
-- Commands: `RegisterBeneficiaryCommand`, `UpdateBeneficiaryInfoCommand`,
-  `ActivateBeneficiaryCommand`, `DeactivateBeneficiaryCommand`
-- Queries: `GetBeneficiaryByIdQuery`, `ListBeneficiariesByStatusQuery`
-- Evento: `BeneficiaryRegisteredEvent`
-- Repositorio: `BeneficiaryRepository`
-- Servicios: `BeneficiaryCommandService`, `BeneficiaryQueryService`
-- ACL (provider): `BeneficiariesContextFacade` (expuesto a Donations)
+- Aggregate Roots: `BeneficiaryInstitution`, `BeneficiaryInstitutionHeadquarter`, `InstitutionType`
+- Tablas: `beneficiary_institution`, `beneficiary_institution_headquarter`, `institution_type`
+- Repositorios: para cada entidad
+- Servicios: Command y Query services
+- Endpoints: `/api/beneficiary-institutions/**`
 
 Reglas clave:
-- Un beneficiario se registra como `ACTIVE`.
-- Puede ser activado o desactivado segun gestion administrativa.
-- Un beneficiario no se asocia a `companyId`.
+- Una institución beneficiaria es de un tipo específico (InstitutionType)
+- Puede tener múltiples sedes (BeneficiaryInstitutionHeadquarter)
+- Cada sede está vinculada a una `Address`
+- Los beneficiarios NO están asociados a `company_id` (son catálogo global)
+- Las compañías pueden marcear favoritos (`company_favorite_institution`)
 
-### Identity & Access Management (IAM)
-Responsabilidad: registro y autenticacion de usuarios internos y beneficiarios.
+### 4. Location Management (Gestión de Ubicaciones)
 
-- Aggregate Root: `UserAccount`
-- Value Objects: `UserId`, `EmailAddress`, `PasswordHash`, `CompanyId`
-- Enums: `UserRole`, `UserStatus`
-- Commands: `RegisterUserCommand`
-- Queries: `GetUserByIdQuery`, `GetUserByEmailQuery`, `LoginUserQuery`
-- Repositorio: `UserAccountRepository`
-- Servicios: `UserCommandService`, `UserQueryService`, `UserAuthenticationQueryService`
+Responsabilidad: gestionar direcciones y ubicaciones geográficas.
 
-Reglas clave:
-- Registro requiere email valido y password >= 6.
-- Si `role=MANAGER`, `companyId` es obligatorio.
-- Si `role=BENEFICIARY`, `companyId` debe ser `null` (o campo omitido).
-- Login valida credenciales (hash con BCrypt) y emite JWT con `userId`, `email`, `companyId` y `role`.
-
-### Company Management
-Responsabilidad: agrupar la informacion operativa por empresa/cliente retail.
-
-- Aggregate Root: `Company`
-- Value Objects: `CompanyId`
-- Atributos principales: `name`, `headquarters`
+- Aggregate Roots: `Address`, `Country`
+- Tablas: `address`, `country`
+- Repositorios: para cada entidad
 
 Reglas clave:
-- Cada usuario interno queda asociado a una `companyId`.
-- La informacion operativa de merma y donacion queda aislada por `companyId` para usuarios retail.
-- Las companies se usan como catálogo público para el alta de retail y como filtro de aislamiento multi-tenant.
+- Cada dirección pertenece a un País
+- Direcciones pueden ser reutilizadas por múltiples entidades (Retail/Beneficiary headquarters)
 
-## Integraciones entre contextos (ACL)
+### 5. Company Retail Management (Gestión de Compañías Retail)
 
-- Donations consume Merma y Beneficiaries via ACL (facades) para evitar acoplamiento.
-- Merma y Beneficiaries exponen facades con operaciones minimas (buscar id, marcar donada).
-- Las operaciones de merma y donacion quedan restringidas por `companyId` para usuarios retail.
-- Los usuarios beneficiarios siguen accediendo a la logica de donaciones segun su flujo propio y no usan el mismo ACL de pertenencia por empresa para merma publicada.
-- El backend toma `userId` y `companyId` directamente del JWT autenticado; el frontend solo transporta el token y reconstruye la sesion a partir de sus claims.
+Responsabilidad: administrar empresas retail y sus sedes.
 
-## Modelo de datos (tablas principales)
+- Aggregate Roots: `RetailCompany`, `RetailCompanyHeadquarter`, `CompanyFavoriteInstitution`
+- Tablas: `retail_company`, `retail_company_headquarter`, `company_favorite_institution`
+- Repositorios: para cada entidad
+- Endpoints: `/api/retail-companies/**`
 
-- `mermas`
-  - id, product_name, category_name, quantity, expiration_date, reason, status, company_id, created_at, updated_at
-- `donations`
-  - id, merma_id, beneficiary_id, donation_quantity, scheduled_delivery_date,
-    delivery_date, reception_date, reception_comment, status, company_id, created_at, updated_at
-- `donation_requests`
-  - id, merma_id, beneficiary_id, status, notes, company_id, created_at, updated_at
-- `status_change_logs`
-  - id, entity_type, entity_id, from_status, to_status, changed_by_user_id, changed_at
-- `beneficiaries`
-  - id, beneficiary_name, type, address, status, created_at, updated_at
-- `beneficiary_accepted_products`
-  - beneficiary_id, accepted_product
-- `companies`
-  - id, name, headquarters, created_at, updated_at
-- `user_accounts`
-  - id, email, password_hash, company_id, role, status, created_at, updated_at
+Reglas clave:
+- Una compañía retail pertenece a un Retail User (Manager)
+- Puede tener múltiples sedes
+- Puede marcar instituciones beneficiarias como favoritas
+- Esta información se usa para aislamiento multi-tenant en Shrinkage y Donations
 
-Relaciones principales:
-- Donation referencia Merma (merma_id) y Beneficiary (beneficiary_id) como VOs embebidos.
-- DonationRequest references Merma (merma_id) and Beneficiary (beneficiary_id) as embedded value objects.
-- Beneficiary tiene coleccion de productos aceptados.
-- Las entidades retail y de trazabilidad usan `company_id`; `beneficiaries` no.
+### 6. Identity & Access Management (IAM)
+
+Responsabilidad: registro, autenticación y autorización de usuarios (retail y beneficiarios).
+
+- Aggregate Roots: `UserAccount`, `RetailUser`, `BeneficiaryUser`, `Role`, `Permission`, `RolePermission`
+- Tablas: `user_account`, `retail_user`, `beneficiary_user`, `role`, `permission`, `role_permission`
+- Servicios: Command y Query services para autenticación y búsqueda
+- Endpoints: `/api/auth/register`, `/api/auth/login`, `/api/auth/profile`, `/api/auth/users/**`
+
+Reglas clave:
+- Un `UserAccount` puede ser:
+  - `RetailUser`: vinculado a una `RetailCompany` y un `Role`
+  - `BeneficiaryUser`: vinculado a una `BeneficiaryInstitution`
+- Autenticación genera JWT con:
+  - userId, email, companyId (si retail), beneficiaryInstitutionId (si beneficiary), role
+- Roles controlan acceso granular a través de `Permission` y `RolePermission`
+- Registro requiere email válido y password ≥ 6 caracteres
+- Contraseñas se hashean con BCrypt
+
+### 7. Subscription Management (Suscripciones)
+
+Responsabilidad: gestionar planes y suscripciones de compañías.
+
+- Aggregate Roots: `Subscription`, `Plan`
+- Tablas: `subscription`, `plan`
+- Repositorios: para cada entidad
+
+Reglas clave:
+- Un `Plan` define límites: usuarios máximos, storage máximo
+- Una `Subscription` vincula una compañía favorita a un plan
+- Se puede activar/desactivar según gestión administrativa
+
+### 8. Shared Context (Compartido)
+
+Responsabilidad: auditoría y trazabilidad transversal.
+
+- Entity: `StatusChangeLog`
+- Tabla: `status_change_logs`
+- Registra: cambios de estado de cualquier entidad (entity_type, entity_id, from_status, to_status, changed_by_user_id)
+
+## Integraciones entre contextos (ACL - Anti-Corruption Layer)
+
+### Estrategia de integración
+
+- **Donation Logistics** consume **Shrinkage Management** y **Beneficiary Management** vía ACL para evitar acoplamiento directo
+- **Shrinkage Management** expone servicios ACL para consultar mermas donables y marcar como entregadas
+- **Beneficiary Management** expone servicios ACL para validar instituciones beneficiarias activas
+- Las operaciones se coordinan a través de repositories y servicios especializados sin exposición de detalles internos
+
+### Flujos de integración
+
+1. **Crear donación** (Donation Logistics):
+   - Valida merma mediante Shrinkage Management ACL
+   - Valida beneficiario mediante Beneficiary Management ACL
+   - Crea donation con items
+
+2. **Confirmar recepción** (Donation Logistics):
+   - Actualiza estado de donation a CONFIRMED
+   - Notifica a Shrinkage Management para cambiar estado a DONATED
+   - Registra log de auditoría en `status_change_logs`
+
+3. **Crear solicitud de donación** (Beneficiary request):
+   - Beneficiary consulta mermas en estado DONABLE (via Shrinkage ACL)
+   - Crea DonationRequest en estado PENDING
+   - Notifica a manager retail
+
+4. **Aceptar/Rechazar solicitud** (Manager retail):
+   - Si ACCEPT: crea Donation automáticamente, marca merma como IN_PROCESS
+   - Si REJECT: mantiene merma en DONABLE
+
+### Aislamiento multi-tenant
+
+- **Operaciones retail**: todas usan `company_id` para filtrar datos del usuario autenticado
+- **Operaciones beneficiarios**: no usan `company_id` (catálogo global de instituciones)
+- **Validación de acceso**: se valida que el usuario pertenezca a la compañía en cada operación
+- **Datos JWT**: el token contiene `companyId` (retail) o `beneficiaryInstitutionId` (beneficiario)
+
+## Modelo de datos (tablas generadas en MySQL)
+
+El backend genera **24 tablas** al iniciar con `spring.jpa.hibernate.ddl-auto=update`. 
+
+### Tablas del dominio (por contexto)
+
+#### 1. Shrinkage Management (Gestión de Merma)
+
+- **`shrinkage`** - Productos en merma
+  - shrinkage_id, name, quantity, expiration_date, specific_reason, status, pickup_date, retail_company_headquarter_id, category_id, shrinkage_reason_id, company_id (embedded), created_at, updated_at
+  - Status: REGISTERED, DONABLE, IN_PROCESS, DONATED, NOT_DONABLE
+  
+- **`shrinkage_reason`** - Razones de merma
+  - shrinkage_reason_id, name, created_at, updated_at
+  
+- **`category`** - Categorías de productos
+  - category_id, name, created_at, updated_at
+  
+- **`shrinkage_log`** - Log de cambios en mermas
+  - shrinkage_log_id, shrinkage_id, status, created_at, updated_at
+
+#### 2. Donation Logistics Management (Logística de Donaciones)
+
+- **`donations`** - Donaciones principales
+  - id, beneficiary_institution_id (VO), donation_quantity (VO), scheduled_delivery_date (VO), delivery_date (VO), reception_date (VO), reception_comment, status, company_id (VO), completed_at, created_at, updated_at
+  - Status: ASSIGNED, DELIVERED, CONFIRMED
+
+- **`donation_items`** - Items dentro de cada donación
+  - donation_item_id, donation_id (FK), shrinkage_reference_id (VO), status, created_at, updated_at
+  - Status: ASSIGNED, DELIVERED, CONFIRMED, CANCELLED
+
+- **`donation_requests`** - Solicitudes de donación por parte de beneficiarios
+  - id, shrinkage_reference_id (VO), beneficiary_reference_id (VO), company_id (VO), status, notes, created_at, updated_at
+  - Status: PENDING, ACCEPTED, REJECTED, CANCELLED, COMPLETED
+
+#### 3. Beneficiary Management (Gestión de Beneficiarios)
+
+- **`beneficiary_institution`** - Instituciones beneficiarias (colegios, albergues, ONGs)
+  - beneficiary_institution_id, institution_type_id (FK), name, created_at, updated_at
+
+- **`beneficiary_institution_headquarter`** - Sedes de instituciones beneficiarias
+  - beneficiary_institution_headquarter_id, beneficiary_institution_id (FK), description, address_id (FK), created_at, updated_at
+
+- **`institution_type`** - Tipos de instituciones beneficiarias
+  - institution_type_id, name, created_at, updated_at
+
+#### 4. Location Management (Gestión de Ubicaciones)
+
+- **`address`** - Direcciones
+  - address_id, street1, street2, city, state_province, postal_code, country_id (FK), created_at, updated_at
+
+- **`country`** - Países
+  - country_id, name, created_at, updated_at
+
+#### 5. Company Retail Management (Gestión de Compañías Retail)
+
+- **`retail_company`** - Empresas retail
+  - retail_company_id, name, created_at, updated_at
+
+- **`retail_company_headquarter`** - Sedes de empresas retail
+  - retail_company_headquarter_id, retail_company_id (FK), description, address_id (FK), created_at, updated_at
+
+- **`company_favorite_institution`** - Instituciones favoritas por compañía
+  - company_favorite_institution_id, retail_company_id (FK), beneficiary_institution_id (FK), created_at, updated_at
+
+#### 6. Auth & Access Management (IAM)
+
+- **`user_account`** - Cuentas de usuario
+  - user_account_id, email (VO), password_hash (VO), username, created_at, updated_at
+
+- **`retail_user`** - Usuarios de retail (vinculados a compañía)
+  - retail_user_id, user_account_id (FK, unique), retail_company_id (FK), role_id (FK), status
+
+- **`beneficiary_user`** - Usuarios de beneficiarios
+  - beneficiary_user_id, user_account_id (FK, unique), beneficiary_institution_id (FK)
+
+- **`role`** - Roles disponibles
+  - role_id, name, created_at, updated_at
+
+- **`role_permission`** - Asignación de permisos a roles
+  - role_permission_id, role_id (FK), permission_id (FK), created_at, updated_at
+
+- **`permission`** - Permisos del sistema
+  - permission_id, name, description, created_at, updated_at
+
+#### 7. Shared/Common (Compartidas)
+
+- **`status_change_logs`** - Auditoría de cambios de estado
+  - id, entity_type (enum), entity_id, from_status, to_status, changed_by_user_id, changed_at
+
+#### 8. Subscription Management (Suscripciones)
+
+- **`subscription`** - Suscripciones
+  - subscription_id, company_favorite_institution_id (FK), plan_id (FK), start_date, completed_at, status, created_at, updated_at
+
+- **`plan`** - Planes de suscripción
+  - plan_id, is_active, max_storage_bytes, max_users, plan_name, plan_price (decimal), created_at, updated_at
+
+### Relaciones principales
+
+- `shrinkage` → `retail_company_headquarter` (ManyToOne)
+- `shrinkage` → `category` (ManyToOne)
+- `shrinkage` → `shrinkage_reason` (ManyToOne)
+- `donations` → `donation_items` (OneToMany con cascade)
+- `beneficiary_institution` → `institution_type` (ManyToOne)
+- `beneficiary_institution_headquarter` → `address` (ManyToOne)
+- `retail_company_headquarter` → `address` (ManyToOne)
+- `address` → `country` (ManyToOne)
+- `retail_user` → `user_account` (OneToOne)
+- `retail_user` → `retail_company` (ManyToOne)
+- `retail_user` → `role` (ManyToOne)
+- `beneficiary_user` → `user_account` (OneToOne)
+- `beneficiary_user` → `beneficiary_institution` (ManyToOne)
+- `company_favorite_institution` → `retail_company` (ManyToOne)
+- `company_favorite_institution` → `beneficiary_institution` (ManyToOne)
+- `subscription` → `company_favorite_institution` (ManyToOne)
+- `subscription` → `plan` (ManyToOne)
+- `role_permission` → `role` (ManyToOne)
+- `role_permission` → `permission` (ManyToOne)
 
 ## Base URL y documentacion
 
@@ -925,10 +1066,3 @@ Companies (public, no JWT):
 
 Si no tienes Maven instalado, usa el wrapper:
 
-```powershell
-& "D:\Santiago\UPC\Ciclo 7\Fundamentos\FluxusBackend\FluxusBackend\mvnw.cmd" -f "D:\Santiago\UPC\Ciclo 7\Fundamentos\FluxusBackend\FluxusBackend\pom.xml" test
-```
-
-```powershell
-& "D:\Santiago\UPC\Ciclo 7\Fundamentos\FluxusBackend\FluxusBackend\mvnw.cmd" -f "D:\Santiago\UPC\Ciclo 7\Fundamentos\FluxusBackend\FluxusBackend\pom.xml" spring-boot:run
-```

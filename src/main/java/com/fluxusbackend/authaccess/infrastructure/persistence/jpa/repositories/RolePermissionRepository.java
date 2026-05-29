@@ -6,4 +6,8 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface RolePermissionRepository extends JpaRepository<RolePermission, Long> {
+    boolean existsByRoleAndPermission(
+            com.fluxusbackend.authaccess.domain.model.aggregates.Role role,
+            com.fluxusbackend.authaccess.domain.model.aggregates.Permission permission
+    );
 }
