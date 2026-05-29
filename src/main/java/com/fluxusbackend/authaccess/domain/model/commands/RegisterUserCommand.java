@@ -10,7 +10,6 @@ public record RegisterUserCommand(
         String username,
         UserActor actor,
         Long retailCompanyId,
-        Long roleId,
         Long beneficiaryInstitutionId
 ) {
     public RegisterUserCommand {
@@ -33,11 +32,9 @@ public record RegisterUserCommand(
             if (beneficiaryInstitutionId == null || beneficiaryInstitutionId <= 0) {
                 throw new IllegalArgumentException("Beneficiary institution id is required for BENEFICIARY users");
             }
-            if (retailCompanyId != null || roleId != null) {
-                throw new IllegalArgumentException("Retail company id and role id must be null for BENEFICIARY users");
+            if (retailCompanyId != null) {
+                throw new IllegalArgumentException("Retail company id must be null for BENEFICIARY users");
             }
         }
     }
 }
-
-

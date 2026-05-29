@@ -34,4 +34,8 @@ public class Category {
     public String getName() {
         return name;
     }
+
+    public void updateName(String name) {
+        this.name = Objects.requireNonNull(name, "Category name is required");
+    }
 }

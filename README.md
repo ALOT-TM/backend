@@ -69,7 +69,8 @@ Flujo principal:
 
 Este repositorio está en un estado funcional y compilable. Cambios principales implementados y activos en el códigobase:
 
-- **Autenticación JWT**: `JwtTokenService` y `JwtAuthenticationFilter` con HMAC-SHA256. Login emite JWT con `userId`, `email`, `companyId`, `beneficiaryInstitutionId`, `actor` y `role`.
+- **Autenticación JWT**: `JwtTokenService` y `JwtAuthenticationFilter` con HMAC-SHA256. Login emite JWT con `userId`, `email`, `companyId`, `beneficiaryInstitutionId`, `actor`, `roleId` y `roleName`.
+- **Rol por defecto en retail**: al registrar un usuario RETAIL, el sistema crea/reutiliza un rol "RETAIL_FULL_ACCESS" y asigna todos los permisos.
 - **Swagger UI con JWT**: `OpenApiConfig` configura autenticación Bearer en Swagger (candado 🔒 en endpoints protegidos).
 - **Sin formulario de login**: `SecurityConfig` deshabilita form login y HTTP Basic. Solo API REST.
 - **Seguridad stateless**: `SessionCreationPolicy.STATELESS` + JWT validation en cada request.
@@ -97,6 +98,35 @@ curl -X GET "http://localhost:8080/api/audit/status-changes?userId=1" \
   - `POST /api/retail-companies` - Crear compañía
   - `GET /api/retail-companies` - Listar compañías
   - `GET /api/retail-companies/{companyId}` - Obtener compañía por id
+- **Beneficiary endpoints públicos** (sin JWT):
+  - `POST /api/beneficiary-institutions`
+  - `GET /api/beneficiary-institutions`
+  - `GET /api/beneficiary-institutions/{beneficiaryId}`
+  - `PUT /api/beneficiary-institutions/{beneficiaryId}`
+- **Institution type endpoint público** (sin JWT):
+  - `POST /api/institution-types`
+- **Location endpoints públicos** (sin JWT):
+  - `POST /api/countries`
+  - `GET /api/countries`
+  - `GET /api/countries/{countryId}`
+  - `POST /api/addresses`
+  - `GET /api/addresses`
+  - `GET /api/addresses/{addressId}`
+- **Headquarter endpoints públicos** (sin JWT):
+  - `POST /api/retail-company-headquarters`
+  - `GET /api/retail-company-headquarters`
+  - `GET /api/retail-company-headquarters/{headquarterId}`
+  - `POST /api/beneficiary-institution-headquarters`
+  - `GET /api/beneficiary-institution-headquarters`
+  - `GET /api/beneficiary-institution-headquarters/{headquarterId}`
+- **Catálogos de merma**:
+  - `POST /api/shrinkages/categories`
+  - `PATCH /api/shrinkages/categories/{categoryId}`
+  - `DELETE /api/shrinkages/categories/{categoryId}`
+  - `GET /api/shrinkages/categories`
+  - `GET /api/shrinkages/categories/{categoryId}`
+  - `POST /api/shrinkages/reasons`
+  - `PATCH /api/shrinkages/reasons/{shrinkageReasonId}`
 - **Nuevos endpoints**:
   - `GET /api/donations/statistics` - Estadísticas de donaciones por beneficiario (manager only)
   - `GET /api/requests/company` - Listado de requests de la compañía (manager only)
@@ -171,7 +201,7 @@ Responsabilidad: administrar instituciones beneficiarias, tipos y ubicaciones.
 - Tablas: `beneficiary_institution`, `beneficiary_institution_headquarter`, `institution_type`
 - Repositorios: para cada entidad
 - Servicios: Command y Query services
-- Endpoints: `/api/beneficiary-institutions/**`
+- Endpoints: `/api/beneficiary-institutions/**`, `/api/beneficiary-institution-headquarters/**`
 
 Reglas clave:
 - Una institución beneficiaria es de un tipo específico (InstitutionType)
@@ -187,6 +217,7 @@ Responsabilidad: gestionar direcciones y ubicaciones geográficas.
 - Aggregate Roots: `Address`, `Country`
 - Tablas: `address`, `country`
 - Repositorios: para cada entidad
+- Endpoints: `/api/countries/**`, `/api/addresses/**`
 
 Reglas clave:
 - Cada dirección pertenece a un País
@@ -199,7 +230,7 @@ Responsabilidad: administrar empresas retail y sus sedes.
 - Aggregate Roots: `RetailCompany`, `RetailCompanyHeadquarter`, `CompanyFavoriteInstitution`
 - Tablas: `retail_company`, `retail_company_headquarter`, `company_favorite_institution`
 - Repositorios: para cada entidad
-- Endpoints: `/api/retail-companies/**`
+- Endpoints: `/api/retail-companies/**`, `/api/retail-company-headquarters/**`
 
 Reglas clave:
 - Una compañía retail pertenece a un Retail User (Manager)
@@ -221,7 +252,7 @@ Reglas clave:
   - `RetailUser`: vinculado a una `RetailCompany` y un `Role`
   - `BeneficiaryUser`: vinculado a una `BeneficiaryInstitution`
 - Autenticación genera JWT con:
-  - userId, email, companyId (si retail), beneficiaryInstitutionId (si beneficiary), role
+  - userId, email, companyId (si retail), beneficiaryInstitutionId (si beneficiary), roleId, roleName
 - Roles controlan acceso granular a través de `Permission` y `RolePermission`
 - Registro requiere email válido y password ≥ 6 caracteres
 - Contraseñas se hashean con BCrypt
@@ -456,22 +487,24 @@ La app **no tiene formulario de login** en la web. La autenticación es **JWT ba
   curl -X POST http://localhost:8080/api/auth/register \
      -H "Content-Type: application/json" \
      -d '{
-       "email": "user@test.com",
+       "email": "retail@empresa.com",
        "rawPassword": "pass123",
-       "role": "MANAGER",
-       "companyId": 1
+       "username": "retail1",
+       "actor": "RETAIL",
+       "retailCompanyId": 1
      }'
    ```
 
-   Beneficiario (sin compañia):
+   Beneficiario:
    ```bash
   curl -X POST http://localhost:8080/api/auth/register \
      -H "Content-Type: application/json" \
      -d '{
        "email": "beneficiary@test.com",
        "rawPassword": "pass123",
-       "role": "BENEFICIARY",
-       "companyId": null
+       "username": "benef1",
+       "actor": "BENEFICIARY",
+       "beneficiaryInstitutionId": 1
      }'
    ```
 
@@ -488,8 +521,10 @@ La app **no tiene formulario de login** en la web. La autenticación es **JWT ba
      "user": {
        "id": 1,
        "email": "user@test.com",
-       "role": "MANAGER",
-       "companyId": 1
+       "actor": "RETAIL",
+       "companyId": 1,
+       "roleId": 1,
+       "roleName": "RETAIL_FULL_ACCESS"
      },
      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
    }
@@ -510,7 +545,7 @@ La app **no tiene formulario de login** en la web. La autenticación es **JWT ba
 
 - **Login form deshabilitado**: `@Configuration(proxyBeanMethods=false)` + `.formLogin(form -> form.disable())`
 - **HTTP Basic deshabilitado**: `.httpBasic(basic -> basic.disable())`
-- **JWT required**: todos los endpoints excepto `/api/auth/register`, `/api/auth/login`, `/api/retail-companies/**` y Swagger docs
+- **JWT required**: todos los endpoints excepto `/api/auth/register`, `/api/auth/login`, `/api/retail-companies/**`, `/api/beneficiary-institutions/**`, `/api/beneficiary-institution-headquarters/**`, `/api/retail-company-headquarters/**`, `/api/institution-types/**`, `/api/countries/**`, `/api/addresses/**`, `/api/shrinkages/categories/**`, `/api/shrinkages/reasons/**` y Swagger docs
 - **Session stateless**: `SessionCreationPolicy.STATELESS`
 - **CORS enabled**: permite `http://localhost:5173` (configurado en `WebConfig`)
 - **CompanyId en escrituras**: operaciones de registro/modificacion usan `companyId` del token; algunos GETs aceptan `companyId` pero se valida contra el token.
@@ -539,12 +574,30 @@ Merma:
 - `GET /api/shrinkages/company`
 - Beneficiarios: solo pueden leer mermas en estado `DONABLE`.
 
-Beneficiarios:
-- `POST /api/beneficiary-institutions`
-- `PUT /api/beneficiary-institutions/{beneficiaryId}`
-- `GET /api/beneficiary-institutions/{beneficiaryId}`
-- `GET /api/beneficiary-institutions`
-- `beneficiary_institutions` no lleva `company_id` en el modelo actual.
+Catálogos de merma:
+- `POST /api/shrinkages/categories`
+- `PATCH /api/shrinkages/categories/{categoryId}`
+- `DELETE /api/shrinkages/categories/{categoryId}`
+- `GET /api/shrinkages/categories`
+- `GET /api/shrinkages/categories/{categoryId}`
+- `POST /api/shrinkages/reasons`
+- `PATCH /api/shrinkages/reasons/{shrinkageReasonId}`
+
+Ubicaciones:
+- `POST /api/countries`
+- `GET /api/countries`
+- `GET /api/countries/{countryId}`
+- `POST /api/addresses`
+- `GET /api/addresses`
+- `GET /api/addresses/{addressId}`
+
+Sedes:
+- `POST /api/retail-company-headquarters`
+- `GET /api/retail-company-headquarters`
+- `GET /api/retail-company-headquarters/{headquarterId}`
+- `POST /api/beneficiary-institution-headquarters`
+- `GET /api/beneficiary-institution-headquarters`
+- `GET /api/beneficiary-institution-headquarters/{headquarterId}`
 
 Donaciones:
 - `POST /api/donations/create`
@@ -578,8 +631,8 @@ IAM:
 
 Seguridad:
 - Las rutas protegidas requieren `Authorization: Bearer <jwt>`.
-- El JWT contiene `userId`, `email`, `companyId`, `beneficiaryInstitutionId`, `actor` y `role`.
-- Las rutas `/api/retail-companies/**` son publicas y no requieren token.
+- El JWT contiene `userId`, `email`, `companyId`, `beneficiaryInstitutionId`, `actor`, `roleId` y `roleName`.
+- Las rutas `/api/retail-companies/**`, `/api/beneficiary-institutions/**`, `/api/beneficiary-institution-headquarters/**`, `/api/retail-company-headquarters/**`, `/api/institution-types/**`, `/api/countries/**`, `/api/addresses/**`, `/api/shrinkages/categories/**` y `/api/shrinkages/reasons/**` son publicas y no requieren token.
 
 ## Ejemplos rapidos por contexto
 
@@ -602,14 +655,20 @@ PATCH /api/shrinkages/1/donable
 
 Beneficiarios (registrar y desactivar):
 ```http
+POST /api/institution-types
+Content-Type: application/json
+
+{
+  "name": "HOSPITAL"
+}
+```
+```http
 POST /api/beneficiary-institutions
 Content-Type: application/json
 
 {
   "name": "Colegio San Juan",
-  "type": "SCHOOL",
-  "address": "Av. Principal 123",
-  "acceptedProducts": ["Lacteos", "Conservas"]
+  "institutionTypeId": 1
 }
 ```
 ```http
@@ -685,8 +744,7 @@ POST /api/retail-companies
 Content-Type: application/json
 
 {
-  "name": "Retail Norte SAC",
-  "headquarters": "Lima"
+  "name": "Retail Norte SAC"
 }
 ```
 
@@ -732,8 +790,9 @@ Content-Type: application/json
 {
   "email": "manager@retail.com",
   "rawPassword": "admin123",
-  "role": "MANAGER",
-  "companyId": 1
+  "username": "retail1",
+  "actor": "RETAIL",
+  "retailCompanyId": 1
 }
 ```
 
@@ -744,8 +803,9 @@ Content-Type: application/json
 {
   "email": "beneficiary@ngo.org",
   "rawPassword": "benef123",
-  "role": "BENEFICIARY",
-  "companyId": null
+  "username": "benef1",
+  "actor": "BENEFICIARY",
+  "beneficiaryInstitutionId": 1
 }
 ```
 
@@ -765,8 +825,8 @@ Respuesta de login:
     "id": 1,
     "email": { "value": "manager@retail.com" },
     "companyId": { "value": 1 },
-    "role": "MANAGER",
-    "status": "ACTIVE"
+    "roleId": 1,
+    "roleName": "RETAIL_FULL_ACCESS"
   },
   "token": "eyJhbGciOiJIUzI1NiJ9..."
 }
@@ -790,7 +850,7 @@ Response (200):
 {
   "companyId": 1,
   "email": "manager@retail.com",
-  "role": "MANAGER"
+  "roleName": "RETAIL_FULL_ACCESS"
 }
 ```
 
@@ -839,11 +899,11 @@ curl -X POST http://localhost:8080/api/shrinkages \
 curl -X PATCH http://localhost:8080/api/shrinkages/1/donable
 ```
 
-3) Registrar beneficiario:
+3) Registrar beneficiario (tipo + institucion):
 ```bash
-curl -X POST http://localhost:8080/api/beneficiary-institutions \
+curl -X POST http://localhost:8080/api/institution-types \
   -H "Content-Type: application/json" \
-  -d '{"name":"Colegio San Juan","type":"SCHOOL","address":"Av. Principal 123","acceptedProducts":["Lacteos","Conservas"]}'
+  -d '{"name":"HOSPITAL"}'
 ```
 
 4) Crear donacion:
@@ -970,24 +1030,52 @@ Merma:
 - Not Donable (`PATCH /api/shrinkages/{shrinkageId}/not-donable`): sin body.
 - Donated (`PATCH /api/shrinkages/{shrinkageId}/donated`): sin body.
 
+Catálogos de merma:
+- Create category (`POST /api/shrinkages/categories`):
+```json
+{
+  "name": "Lacteos"
+}
+```
+- Patch category (`PATCH /api/shrinkages/categories/{categoryId}`):
+```json
+{
+  "name": "Congelados"
+}
+```
+- Create reason (`POST /api/shrinkages/reasons`):
+```json
+{
+  "name": "Damaged packaging"
+}
+```
+- Patch reason (`PATCH /api/shrinkages/reasons/{shrinkageReasonId}`):
+```json
+{
+  "name": "Expired"
+}
+```
+
 Beneficiarios:
+- Register type (`POST /api/institution-types`):
+```json
+{
+  "name": "HOSPITAL"
+ }
+```
 - Register (`POST /api/beneficiary-institutions`):
 ```json
 {
   "name": "Colegio San Juan",
-  "type": "SCHOOL",
-  "address": "Av. Principal 123",
-  "acceptedProducts": ["Lacteos", "Conservas"]
+  "institutionTypeId": 1
 }
 ```
 - Update (`PUT /api/beneficiary-institutions/{beneficiaryId}`):
 ```json
 {
   "name": "Colegio San Juan",
-  "type": "SCHOOL",
-  "address": "Av. Principal 123",
-  "acceptedProducts": ["Lacteos", "Conservas", "Granos"]
-}
+  "institutionTypeId": 1
+ }
 ```
 - List (`GET /api/beneficiary-institutions`): sin body.
 
@@ -1017,14 +1105,15 @@ Donaciones:
 
 IAM:
 - Register (`POST /api/auth/register`):
-  - `MANAGER`: `companyId` obligatorio.
-  - `BENEFICIARY`: `companyId` debe ser `null` o omitido.
+  - `RETAIL`: `retailCompanyId` obligatorio.
+  - `BENEFICIARY`: `beneficiaryInstitutionId` obligatorio.
 ```json
 {
   "email": "admin@retail.com",
   "rawPassword": "admin123",
-  "role": "MANAGER",
-  "companyId": 1
+  "username": "retail1",
+  "actor": "RETAIL",
+  "retailCompanyId": 1
 }
 ```
 
@@ -1032,8 +1121,9 @@ IAM:
 {
   "email": "beneficiary@ngo.org",
   "rawPassword": "benef123",
-  "role": "BENEFICIARY",
-  "companyId": null
+  "username": "benef1",
+  "actor": "BENEFICIARY",
+  "beneficiaryInstitutionId": 1
 }
 ```
 - Login (`POST /api/auth/login`):
@@ -1048,8 +1138,7 @@ Companies (public, no JWT):
 - Create (`POST /api/retail-companies`):
 ```json
 {
-  "name": "Retail Norte SAC",
-  "headquarters": "Lima"
+  "name": "Retail Norte SAC"
 }
 ```
 - List (`GET /api/retail-companies`): sin body.
@@ -1066,3 +1155,7 @@ Companies (public, no JWT):
 
 Si no tienes Maven instalado, usa el wrapper:
 
+```powershell
+.\mvnw.cmd clean package -DskipTests
+java -jar target\FluxusBackend-0.0.1-SNAPSHOT.jar
+```

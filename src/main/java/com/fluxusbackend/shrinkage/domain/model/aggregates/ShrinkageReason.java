@@ -34,4 +34,8 @@ public class ShrinkageReason {
     public String getName() {
         return name;
     }
+
+    public void updateName(String name) {
+        this.name = Objects.requireNonNull(name, "Shrinkage reason name is required");
+    }
 }

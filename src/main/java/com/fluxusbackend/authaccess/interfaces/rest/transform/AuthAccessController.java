@@ -6,7 +6,6 @@ import com.fluxusbackend.authaccess.domain.model.dto.AuthenticatedUser;
 import com.fluxusbackend.authaccess.domain.model.dto.Profile;
 import com.fluxusbackend.authaccess.domain.model.dto.UserAccountDto;
 import com.fluxusbackend.authaccess.domain.model.queries.GetUserByIdQuery;
-import com.fluxusbackend.authaccess.domain.model.queries.ListUsersByRoleIdQuery;
 import com.fluxusbackend.authaccess.domain.model.queries.LoginUserQuery;
 import com.fluxusbackend.authaccess.domain.model.valueobjects.UserId;
 import com.fluxusbackend.authaccess.domain.services.UserAuthenticationQueryService;
@@ -19,6 +18,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -81,7 +81,8 @@ public class AuthAccessController {
     }
 
         @GetMapping("/profile")
-        public Profile profile() {
+        @SecurityRequirement(name = "bearer")
+         public Profile profile() {
                 Authentication auth = SecurityContextHolder.getContext().getAuthentication();
                 if (auth == null || !(auth.getPrincipal() instanceof AuthenticatedUserPrincipal principal)) {
                         return new Profile(null, null, null, null, null);
@@ -98,26 +99,21 @@ public class AuthAccessController {
         }
 
         @GetMapping("/users/{userId}")
-        @Operation(summary = "Get user account by id (no caller validation)")
-        public UserAccountDto getUserById(@PathVariable Long userId) {
+        @SecurityRequirement(name = "bearer")
+         @Operation(summary = "Get user account by id (no caller validation)")
+         public UserAccountDto getUserById(@PathVariable Long userId) {
                 var user = userQueryService.handle(new GetUserByIdQuery(new UserId(userId)))
                                         .orElseThrow(() -> new IllegalArgumentException("User not found"));
                 return UserAccountDto.from(user);
         }
 
         @GetMapping("/users")
-        @Operation(summary = "List users, optionally filtered by retail role id")
-            public java.util.List<UserAccountDto> listUsers(@org.springframework.web.bind.annotation.RequestParam(required = false) Long roleId) {
-                        java.util.List<UserAccount> users;
-                        if (roleId == null) {
-                                users = userQueryService.findAll();
-                        } else {
-                                users = userQueryService.handle(new ListUsersByRoleIdQuery(roleId));
-                        }
+        @SecurityRequirement(name = "bearer")
+         @Operation(summary = "List users")
+             public java.util.List<UserAccountDto> listUsers() {
+                        java.util.List<UserAccount> users = userQueryService.findAll();
                         var dtos = new java.util.ArrayList<UserAccountDto>();
                         for (var u : users) dtos.add(UserAccountDto.from(u));
                         return dtos;
         }
 }
-
-
