@@ -49,4 +49,12 @@ public class SecurityConfig {
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
+
+    @org.springframework.beans.factory.annotation.Value("${security.bcrypt.rounds:4}")
+    private int bcryptRounds;
+
+    @Bean
+    public org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder passwordEncoder() {
+        return new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder(bcryptRounds);
+    }
 }

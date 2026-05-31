@@ -7,6 +7,8 @@ import com.fluxusbackend.authaccess.domain.model.aggregates.Role;
 import com.fluxusbackend.authaccess.domain.model.aggregates.RolePermission;
 import com.fluxusbackend.authaccess.domain.model.aggregates.UserAccount;
 import com.fluxusbackend.authaccess.domain.model.commands.RegisterUserCommand;
+import com.fluxusbackend.authaccess.domain.model.commands.UpdateProfileCommand;
+import com.fluxusbackend.authaccess.domain.model.commands.ChangePasswordCommand;
 import com.fluxusbackend.authaccess.domain.model.enums.UserActor;
 import com.fluxusbackend.authaccess.domain.model.valueobjects.PasswordHash;
 import com.fluxusbackend.authaccess.domain.services.UserCommandService;
@@ -30,7 +32,7 @@ public class UserCommandServiceImpl implements UserCommandService {
     private final BeneficiaryInstitutionRepository beneficiaryInstitutionRepository;
     private final PermissionRepository permissionRepository;
     private final RolePermissionRepository rolePermissionRepository;
-    private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+    private final BCryptPasswordEncoder passwordEncoder;
 
     public UserCommandServiceImpl(
             UserAccountRepository repository,
@@ -38,7 +40,8 @@ public class UserCommandServiceImpl implements UserCommandService {
             RoleRepository roleRepository,
             BeneficiaryInstitutionRepository beneficiaryInstitutionRepository,
             PermissionRepository permissionRepository,
-            RolePermissionRepository rolePermissionRepository
+            RolePermissionRepository rolePermissionRepository,
+            BCryptPasswordEncoder passwordEncoder
     ) {
         this.repository = repository;
         this.retailCompanyRepository = retailCompanyRepository;
@@ -46,6 +49,7 @@ public class UserCommandServiceImpl implements UserCommandService {
         this.beneficiaryInstitutionRepository = beneficiaryInstitutionRepository;
         this.permissionRepository = permissionRepository;
         this.rolePermissionRepository = rolePermissionRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Override
@@ -92,5 +96,31 @@ public class UserCommandServiceImpl implements UserCommandService {
                 rolePermissionRepository.save(new RolePermission(role, permission));
             }
         }
+    }
+
+    @Override
+    @Transactional
+    public UserAccount handle(UpdateProfileCommand command) {
+        var user = repository.findById(command.userId())
+                .orElseThrow(() -> new NoSuchElementException("User not found"));
+        var existing = repository.findByEmailValue(command.email());
+        if (existing.isPresent() && !existing.get().getUserId().value().equals(command.userId())) {
+            throw new IllegalArgumentException("Email already in use");
+        }
+        user.updateProfile(command.username(), new com.fluxusbackend.authaccess.domain.model.valueobjects.EmailAddress(command.email()));
+        return repository.save(user);
+    }
+
+    @Override
+    @Transactional
+    public void handle(ChangePasswordCommand command) {
+        var user = repository.findById(command.userId())
+                .orElseThrow(() -> new NoSuchElementException("User not found"));
+        if (!passwordEncoder.matches(command.currentPassword(), user.getPasswordHash().value())) {
+            throw new IllegalArgumentException("Current password does not match");
+        }
+        var newHash = new PasswordHash(passwordEncoder.encode(command.newPassword()));
+        user.updatePassword(newHash);
+        repository.save(user);
     }
 }

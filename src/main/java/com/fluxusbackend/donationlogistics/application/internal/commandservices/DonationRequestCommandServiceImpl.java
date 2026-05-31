@@ -65,6 +65,14 @@ public class DonationRequestCommandServiceImpl implements DonationRequestCommand
     public DonationRequest handle(AcceptDonationRequestCommand command) {
         var request = repository.findById(command.requestId().value())
             .orElseThrow(() -> new IllegalArgumentException("Donation request not found"));
+
+        var shrinkage = shrinkageRepository.findById(request.getShrinkageReferenceId().value())
+            .orElseThrow(() -> new IllegalArgumentException("Shrinkage not found"));
+
+        if (shrinkage.getStatus() != ShrinkageStatus.DONABLE) {
+            throw new IllegalStateException("La merma ya no está disponible para donación (estado actual: " + shrinkage.getStatus() + ")");
+        }
+
         var fromStatus = request.getStatus();
         request.accept();
         var saved = repository.save(request);
@@ -75,6 +83,24 @@ public class DonationRequestCommandServiceImpl implements DonationRequestCommand
                 saved.getStatus().name()
         );
         updateShrinkageToRequested(request.getShrinkageReferenceId().value());
+
+        // Find other pending requests for the same shrinkage ID and reject them
+        var otherRequests = repository.findByShrinkageId(request.getShrinkageReferenceId().value());
+        for (var other : otherRequests) {
+            if (!other.getDonationRequestId().value().equals(request.getDonationRequestId().value())
+                    && other.getStatus() == com.fluxusbackend.donationlogistics.domain.model.enums.DonationRequestStatus.PENDING) {
+                var oldOtherStatus = other.getStatus();
+                other.reject();
+                repository.save(other);
+                statusChangeLogService.recordChange(
+                        "DONATION_REQUEST",
+                        other.getDonationRequestId().value(),
+                        oldOtherStatus.name(),
+                        other.getStatus().name()
+                );
+            }
+        }
+
         return saved;
     }
 

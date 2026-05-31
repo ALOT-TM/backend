@@ -11,7 +11,8 @@ public record RegisterShrinkageCommand(
         Integer quantity,
         LocalDate expirationDate,
         String specificReason,
-        LocalDate pickupDate
+        LocalDate pickupDate,
+        Double shrinkageValue
 ) {
     public RegisterShrinkageCommand {
         Objects.requireNonNull(retailCompanyHeadquarterId, "Retail company headquarter id is required");
@@ -19,6 +20,7 @@ public record RegisterShrinkageCommand(
         Objects.requireNonNull(shrinkageReasonId, "Shrinkage reason id is required");
         Objects.requireNonNull(name, "Name is required");
         Objects.requireNonNull(quantity, "Quantity is required");
+        Objects.requireNonNull(shrinkageValue, "Shrinkage value is required");
         if (retailCompanyHeadquarterId <= 0) {
             throw new IllegalArgumentException("Retail company headquarter id must be positive");
         }
@@ -33,6 +35,9 @@ public record RegisterShrinkageCommand(
         }
         if (quantity <= 0) {
             throw new IllegalArgumentException("Quantity must be positive");
+        }
+        if (shrinkageValue < 0.0) {
+            throw new IllegalArgumentException("Shrinkage value must be non-negative");
         }
     }
 }

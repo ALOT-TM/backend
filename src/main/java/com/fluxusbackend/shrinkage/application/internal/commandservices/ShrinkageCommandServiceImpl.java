@@ -4,6 +4,7 @@ import com.fluxusbackend.companyretail.infrastructure.persistence.jpa.repositori
 import com.fluxusbackend.shrinkage.domain.model.aggregates.Shrinkage;
 import com.fluxusbackend.shrinkage.domain.model.commands.MarkShrinkageDonableCommand;
 import com.fluxusbackend.shrinkage.domain.model.commands.MarkShrinkageDonatedCommand;
+import com.fluxusbackend.shrinkage.domain.model.commands.MarkShrinkageInProcessCommand;
 import com.fluxusbackend.shrinkage.domain.model.commands.MarkShrinkageNotDonableCommand;
 import com.fluxusbackend.shrinkage.domain.model.commands.RegisterShrinkageCommand;
 import com.fluxusbackend.shrinkage.domain.model.events.ShrinkageStatusChangedEvent;
@@ -68,7 +69,8 @@ public class ShrinkageCommandServiceImpl implements ShrinkageCommandService {
             command.quantity(),
             command.expirationDate(),
             command.specificReason(),
-            command.pickupDate()
+            command.pickupDate(),
+            command.shrinkageValue()
         );
         shrinkage.setCompanyId(companyId);
         var saved = repository.save(shrinkage);
@@ -119,6 +121,24 @@ public class ShrinkageCommandServiceImpl implements ShrinkageCommandService {
         aclService.ensureSameCompanyForRetail(shrinkage);
         var fromStatus = shrinkage.getStatus();
         shrinkage.markDonated();
+        var saved = repository.save(shrinkage);
+        statusChangeLogService.recordChange(
+            "SHRINKAGE",
+            saved.getShrinkageId(),
+            fromStatus.name(),
+            saved.getStatus().name()
+        );
+        return saved;
+    }
+
+    @Override
+    @Transactional
+    public Shrinkage handle(MarkShrinkageInProcessCommand command) {
+        var shrinkage = repository.findById(command.shrinkageId().value())
+                .orElseThrow(() -> new NoSuchElementException("Shrinkage not found"));
+        aclService.ensureSameCompanyForRetail(shrinkage);
+        var fromStatus = shrinkage.getStatus();
+        shrinkage.markInProcess();
         var saved = repository.save(shrinkage);
         statusChangeLogService.recordChange(
             "SHRINKAGE",

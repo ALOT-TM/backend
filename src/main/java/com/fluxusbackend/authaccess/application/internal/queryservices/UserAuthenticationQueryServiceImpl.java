@@ -13,10 +13,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class UserAuthenticationQueryServiceImpl implements UserAuthenticationQueryService {
 
     private final UserAccountRepository repository;
-    private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+    private final BCryptPasswordEncoder passwordEncoder;
 
-    public UserAuthenticationQueryServiceImpl(UserAccountRepository repository) {
+    public UserAuthenticationQueryServiceImpl(UserAccountRepository repository, BCryptPasswordEncoder passwordEncoder) {
         this.repository = repository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Override

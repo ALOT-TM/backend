@@ -43,6 +43,13 @@ public class ShrinkageContextFacadeImpl implements ShrinkageContextFacade {
         shrinkageCommandService.handle(new MarkShrinkageDonatedCommand(new ShrinkageId(shrinkageId)));
         return true;
     }
+
+    @Override
+    public String findShrinkageStatus(Long shrinkageId) {
+        var query = new GetShrinkageByIdQuery(new ShrinkageId(shrinkageId));
+        var shrinkage = shrinkageQueryService.handle(query);
+        return shrinkage.map(value -> value.getStatus().name()).orElse(null);
+    }
 }
 
 

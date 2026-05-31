@@ -24,6 +24,10 @@ public class ExternalShrinkageService {
         return companyId == null || companyId == 0L ? Optional.empty() : Optional.of(companyId);
     }
 
+    public String fetchShrinkageStatus(Long shrinkageId) {
+        return shrinkageContextFacade.findShrinkageStatus(shrinkageId);
+    }
+
     public boolean markShrinkageDonated(Long shrinkageId) {
         return shrinkageContextFacade.markShrinkageDonated(shrinkageId);
     }

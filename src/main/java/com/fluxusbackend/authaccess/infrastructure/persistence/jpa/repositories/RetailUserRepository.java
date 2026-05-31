@@ -6,4 +6,6 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface RetailUserRepository extends JpaRepository<RetailUser, Long> {
+    java.util.List<RetailUser> findByRetailCompany_Id(Long retailCompanyId);
+    java.util.Optional<RetailUser> findByUserAccount_Id(Long userAccountId);
 }

@@ -63,6 +63,9 @@ public class Shrinkage extends AuditableAggregateRoot implements CompanyScoped {
     @Column(name = "pickup_date")
     private LocalDate pickupDate;
 
+    @Column(name = "shrinkage_value", nullable = false)
+    private Double shrinkageValue;
+
     protected Shrinkage() {
     }
 
@@ -74,7 +77,8 @@ public class Shrinkage extends AuditableAggregateRoot implements CompanyScoped {
             Integer quantity,
             LocalDate expirationDate,
             String specificReason,
-            LocalDate pickupDate
+            LocalDate pickupDate,
+            Double shrinkageValue
     ) {
         this.retailCompanyHeadquarter = Objects.requireNonNull(retailCompanyHeadquarter, "Retail company headquarter is required");
         this.category = Objects.requireNonNull(category, "Category is required");
@@ -84,7 +88,12 @@ public class Shrinkage extends AuditableAggregateRoot implements CompanyScoped {
         this.expirationDate = expirationDate;
         this.specificReason = specificReason;
         this.pickupDate = pickupDate;
+        this.shrinkageValue = Objects.requireNonNull(shrinkageValue, "Shrinkage value is required");
         this.status = ShrinkageStatus.NONE;
+    }
+
+    public Double getShrinkageValue() {
+        return shrinkageValue;
     }
 
     public Long getShrinkageId() {
@@ -142,14 +151,17 @@ public class Shrinkage extends AuditableAggregateRoot implements CompanyScoped {
     }
 
     public void markDonable() {
-        if (status != ShrinkageStatus.NONE && status != ShrinkageStatus.NOT_DONABLE) {
-            throw new IllegalStateException("Shrinkage must be NONE or NOT_DONABLE before marking donable");
+        if (status != ShrinkageStatus.NONE && status != ShrinkageStatus.NOT_DONABLE && status != ShrinkageStatus.IN_PROCESS) {
+            throw new IllegalStateException("Shrinkage must be NONE, NOT_DONABLE or IN_PROCESS before marking donable");
         }
         status = ShrinkageStatus.DONABLE;
     }
 
     public void markInProcess() {
-        markRequested();
+        if (status != ShrinkageStatus.DONABLE) {
+            throw new IllegalStateException("Shrinkage must be DONABLE before marking in process");
+        }
+        status = ShrinkageStatus.IN_PROCESS;
     }
 
     public void markRequested() {

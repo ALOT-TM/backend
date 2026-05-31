@@ -7,4 +7,5 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface RoleRepository extends JpaRepository<Role, Long> {
     java.util.Optional<Role> findFirstByRetailCompany_Id(Long retailCompanyId);
+    java.util.List<Role> findByRetailCompany_Id(Long retailCompanyId);
 }

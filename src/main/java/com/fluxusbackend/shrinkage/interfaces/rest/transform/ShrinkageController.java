@@ -5,6 +5,7 @@ import com.fluxusbackend.authaccess.domain.model.enums.UserActor;
 import com.fluxusbackend.shrinkage.domain.model.aggregates.Shrinkage;
 import com.fluxusbackend.shrinkage.domain.model.commands.MarkShrinkageDonableCommand;
 import com.fluxusbackend.shrinkage.domain.model.commands.MarkShrinkageDonatedCommand;
+import com.fluxusbackend.shrinkage.domain.model.commands.MarkShrinkageInProcessCommand;
 import com.fluxusbackend.shrinkage.domain.model.commands.MarkShrinkageNotDonableCommand;
 import com.fluxusbackend.shrinkage.domain.model.commands.RegisterShrinkageCommand;
 import com.fluxusbackend.shrinkage.domain.model.enums.ShrinkageStatus;
@@ -80,6 +81,19 @@ public class ShrinkageController {
         return commandService.handle(new MarkShrinkageDonableCommand(new ShrinkageId(shrinkageId)));
     }
 
+    @PatchMapping("/{shrinkageId}/in-process")
+    @Operation(summary = "Mark shrinkage as in process")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Shrinkage marked in process",
+                    content = @Content(schema = @Schema(implementation = Shrinkage.class))),
+            @ApiResponse(responseCode = "404", description = "Shrinkage not found", content = @Content),
+            @ApiResponse(responseCode = "403", description = "Access denied", content = @Content)
+    })
+    public Shrinkage markInProcess(@PathVariable Long shrinkageId) {
+        authorizationService.requireActor(UserActor.RETAIL);
+        return commandService.handle(new MarkShrinkageInProcessCommand(new ShrinkageId(shrinkageId)));
+    }
+
     @PatchMapping("/{shrinkageId}/not-donable")
     @Operation(summary = "Mark shrinkage as not donable")
     @ApiResponses({
@@ -119,7 +133,8 @@ public class ShrinkageController {
         var shrinkage = queryService.handle(new GetShrinkageByIdQuery(new ShrinkageId(shrinkageId)))
                 .orElseThrow(() -> new IllegalArgumentException("Shrinkage not found"));
                 if (authorizationService.getCurrentUserActor() == UserActor.BENEFICIARY) {
-                        if (shrinkage.getStatus() != ShrinkageStatus.DONABLE) {
+                        var status = shrinkage.getStatus();
+                        if (status != ShrinkageStatus.DONABLE && status != ShrinkageStatus.REQUESTED && status != ShrinkageStatus.IN_PROCESS && status != ShrinkageStatus.DONATED) {
                                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Shrinkage not available");
                         }
                         return shrinkage;

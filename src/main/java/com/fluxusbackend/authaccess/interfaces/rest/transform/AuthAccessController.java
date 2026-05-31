@@ -116,4 +116,33 @@ public class AuthAccessController {
                         for (var u : users) dtos.add(UserAccountDto.from(u));
                         return dtos;
         }
+
+		@org.springframework.web.bind.annotation.PutMapping("/profile")
+		@SecurityRequirement(name = "bearer")
+		@Operation(summary = "Update current user profile")
+		public UserAccountDto updateProfile(@Valid @RequestBody UpdateProfilePayload payload) {
+				Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+				if (auth == null || !(auth.getPrincipal() instanceof AuthenticatedUserPrincipal principal)) {
+						throw new SecurityException("Unauthorized access");
+				}
+				var command = new com.fluxusbackend.authaccess.domain.model.commands.UpdateProfileCommand(principal.userId(), payload.username(), payload.email());
+				var user = userCommandService.handle(command);
+				return UserAccountDto.from(user);
+		}
+
+		public record UpdateProfilePayload(String username, String email) {}
+
+		@org.springframework.web.bind.annotation.PutMapping("/change-password")
+		@SecurityRequirement(name = "bearer")
+		@Operation(summary = "Change current user password")
+		public void changePassword(@Valid @RequestBody ChangePasswordPayload payload) {
+				Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+				if (auth == null || !(auth.getPrincipal() instanceof AuthenticatedUserPrincipal principal)) {
+						throw new SecurityException("Unauthorized access");
+				}
+				var command = new com.fluxusbackend.authaccess.domain.model.commands.ChangePasswordCommand(principal.userId(), payload.currentPassword(), payload.newPassword());
+				userCommandService.handle(command);
+		}
+
+		public record ChangePasswordPayload(String currentPassword, String newPassword) {}
 }

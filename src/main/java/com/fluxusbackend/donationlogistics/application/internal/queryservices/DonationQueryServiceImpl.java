@@ -3,6 +3,7 @@ package com.fluxusbackend.donationlogistics.application.internal.queryservices;
 import com.fluxusbackend.donationlogistics.domain.model.aggregates.Donation;
 import com.fluxusbackend.donationlogistics.domain.model.queries.GetDonationByIdQuery;
 import com.fluxusbackend.donationlogistics.domain.model.queries.ListDonationsByBeneficiaryQuery;
+import com.fluxusbackend.donationlogistics.domain.model.queries.ListDonationsByCompanyQuery;
 import com.fluxusbackend.donationlogistics.domain.model.queries.ListDonationsByStatusQuery;
 import com.fluxusbackend.donationlogistics.domain.model.queries.ListDonationStatisticsQuery;
 import com.fluxusbackend.donationlogistics.interfaces.rest.dto.DonationStatisticDto;
@@ -66,6 +67,12 @@ public class DonationQueryServiceImpl implements DonationQueryService {
                 return new DonationStatisticDto(beneficiaryId, beneficiaryName, totalDonations, totalQuantity);
             })
             .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Donation> handle(ListDonationsByCompanyQuery query) {
+        return repository.findByCompanyIdValue(query.companyId().value());
     }
 }
 

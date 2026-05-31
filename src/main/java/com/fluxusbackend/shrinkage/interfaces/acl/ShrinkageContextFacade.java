@@ -6,4 +6,6 @@ public interface ShrinkageContextFacade {
     Long findCompanyIdByShrinkageId(Long shrinkageId);
 
     boolean markShrinkageDonated(Long shrinkageId);
+
+    String findShrinkageStatus(Long shrinkageId);
 }

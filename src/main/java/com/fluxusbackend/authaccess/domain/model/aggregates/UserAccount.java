@@ -77,6 +77,15 @@ public class UserAccount extends AuditableAggregateRoot {
     public void attachBeneficiaryUser(BeneficiaryUser beneficiaryUser) {
         this.beneficiaryUser = Objects.requireNonNull(beneficiaryUser, "Beneficiary user is required");
     }
+
+    public void updateProfile(String username, EmailAddress email) {
+        this.username = Objects.requireNonNull(username, "Username is required");
+        this.email = Objects.requireNonNull(email, "Email is required");
+    }
+
+    public void updatePassword(PasswordHash passwordHash) {
+        this.passwordHash = Objects.requireNonNull(passwordHash, "Password hash is required");
+    }
 }
 
 

@@ -42,4 +42,8 @@ public class Role extends AuditableAggregateRoot {
     public String getName() {
         return name;
     }
+
+    public void rename(String name) {
+        this.name = Objects.requireNonNull(name, "Name is required");
+    }
 }
