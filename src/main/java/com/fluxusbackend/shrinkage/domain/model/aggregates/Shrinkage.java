@@ -84,7 +84,7 @@ public class Shrinkage extends AuditableAggregateRoot implements CompanyScoped {
         this.expirationDate = expirationDate;
         this.specificReason = specificReason;
         this.pickupDate = pickupDate;
-        this.status = ShrinkageStatus.REGISTERED;
+        this.status = ShrinkageStatus.NONE;
     }
 
     public Long getShrinkageId() {
@@ -142,28 +142,32 @@ public class Shrinkage extends AuditableAggregateRoot implements CompanyScoped {
     }
 
     public void markDonable() {
-        if (status != ShrinkageStatus.REGISTERED) {
-            throw new IllegalStateException("Shrinkage must be registered before marking donable");
+        if (status != ShrinkageStatus.NONE && status != ShrinkageStatus.NOT_DONABLE) {
+            throw new IllegalStateException("Shrinkage must be NONE or NOT_DONABLE before marking donable");
         }
         status = ShrinkageStatus.DONABLE;
     }
 
     public void markInProcess() {
-        if (status != ShrinkageStatus.DONABLE && status != ShrinkageStatus.IN_PROCESS) {
-            throw new IllegalStateException("Shrinkage must be donable before marking in process");
+        markRequested();
+    }
+
+    public void markRequested() {
+        if (status != ShrinkageStatus.DONABLE && status != ShrinkageStatus.REQUESTED) {
+            throw new IllegalStateException("Shrinkage must be donable before marking requested");
         }
-        status = ShrinkageStatus.IN_PROCESS;
+        status = ShrinkageStatus.REQUESTED;
     }
 
     public void markNotDonable() {
-        if (status != ShrinkageStatus.REGISTERED) {
-            throw new IllegalStateException("Shrinkage must be registered before marking not donable");
+        if (status != ShrinkageStatus.NONE && status != ShrinkageStatus.DONABLE) {
+            throw new IllegalStateException("Shrinkage must be NONE or DONABLE before marking not donable");
         }
         status = ShrinkageStatus.NOT_DONABLE;
     }
 
     public void markDonated() {
-        if (status != ShrinkageStatus.DONABLE && status != ShrinkageStatus.IN_PROCESS) {
+        if (status != ShrinkageStatus.DONABLE && status != ShrinkageStatus.REQUESTED) {
             throw new IllegalStateException("Shrinkage must be donable before marking donated");
         }
         status = ShrinkageStatus.DONATED;

@@ -10,7 +10,9 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.List;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -39,6 +41,16 @@ public class InstitutionTypeController {
     public InstitutionType register(@Valid @RequestBody RegisterInstitutionTypeCommand command) {
         var institutionType = new InstitutionType(command.name());
         return repository.save(institutionType);
+    }
+
+    @GetMapping
+    @Operation(summary = "List institution types")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Institution types retrieved",
+                    content = @Content(schema = @Schema(implementation = InstitutionType.class)))
+    })
+    public List<InstitutionType> list() {
+        return repository.findAll();
     }
 }
 

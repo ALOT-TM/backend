@@ -72,12 +72,6 @@ public class ShrinkageCommandServiceImpl implements ShrinkageCommandService {
         );
         shrinkage.setCompanyId(companyId);
         var saved = repository.save(shrinkage);
-        statusChangeLogService.recordChange(
-                "SHRINKAGE",
-                saved.getShrinkageId(),
-                null,
-                saved.getStatus().name()
-        );
         return saved;
     }
 

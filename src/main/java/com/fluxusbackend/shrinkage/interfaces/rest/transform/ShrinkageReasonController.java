@@ -14,6 +14,8 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.List;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -74,5 +76,31 @@ public class ShrinkageReasonController {
         reason.updateName(normalized.name());
         return shrinkageReasonRepository.save(reason);
     }
+
+        @GetMapping
+        @Operation(summary = "List shrinkage reasons")
+        @ApiResponses({
+                        @ApiResponse(responseCode = "200", description = "Shrinkage reasons retrieved",
+                                        content = @Content(schema = @Schema(implementation = ShrinkageReason.class))),
+                        @ApiResponse(responseCode = "403", description = "Access denied", content = @Content)
+        })
+        public List<ShrinkageReason> list() {
+                authorizationService.requireActor(UserActor.RETAIL, UserActor.BENEFICIARY);
+                return shrinkageReasonRepository.findAll();
+        }
+
+            @GetMapping("/{shrinkageReasonId}")
+            @Operation(summary = "Get shrinkage reason by id")
+            @ApiResponses({
+                    @ApiResponse(responseCode = "200", description = "Shrinkage reason found",
+                            content = @Content(schema = @Schema(implementation = ShrinkageReason.class))),
+                    @ApiResponse(responseCode = "404", description = "Shrinkage reason not found", content = @Content),
+                    @ApiResponse(responseCode = "403", description = "Access denied", content = @Content)
+            })
+            public ShrinkageReason getById(@PathVariable Long shrinkageReasonId) {
+                authorizationService.requireActor(UserActor.RETAIL, UserActor.BENEFICIARY);
+                return shrinkageReasonRepository.findById(shrinkageReasonId)
+                        .orElseThrow(() -> new IllegalArgumentException("Shrinkage reason not found"));
+            }
 }
 

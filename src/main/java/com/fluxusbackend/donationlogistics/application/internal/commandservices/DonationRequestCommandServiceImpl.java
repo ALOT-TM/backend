@@ -74,7 +74,7 @@ public class DonationRequestCommandServiceImpl implements DonationRequestCommand
                 fromStatus.name(),
                 saved.getStatus().name()
         );
-        updateShrinkageToInProcess(request.getShrinkageReferenceId().value());
+        updateShrinkageToRequested(request.getShrinkageReferenceId().value());
         return saved;
     }
 
@@ -92,7 +92,7 @@ public class DonationRequestCommandServiceImpl implements DonationRequestCommand
                 fromStatus.name(),
                 saved.getStatus().name()
         );
-        updateShrinkageToInProcess(request.getShrinkageReferenceId().value());
+        updateShrinkageToRequested(request.getShrinkageReferenceId().value());
         return saved;
     }
 
@@ -113,13 +113,19 @@ public class DonationRequestCommandServiceImpl implements DonationRequestCommand
         return saved;
     }
 
-    private void updateShrinkageToInProcess(Long shrinkageId) {
+        private void updateShrinkageToRequested(Long shrinkageId) {
         var shrinkage = shrinkageRepository.findById(shrinkageId)
                 .orElseThrow(() -> new IllegalArgumentException("Shrinkage not found"));
         if (shrinkage.getStatus() == ShrinkageStatus.DONABLE) {
             var oldStatus = shrinkage.getStatus();
-            shrinkage.markInProcess();
+            shrinkage.markRequested();
             var saved = shrinkageRepository.save(shrinkage);
+            statusChangeLogService.recordChange(
+                "SHRINKAGE",
+                saved.getShrinkageId(),
+                oldStatus.name(),
+                saved.getStatus().name()
+            );
             eventPublisher.publishEvent(new ShrinkageStatusChangedEvent(new ShrinkageId(saved.getShrinkageId()), oldStatus, saved.getStatus(), Instant.now()));
         }
     }
