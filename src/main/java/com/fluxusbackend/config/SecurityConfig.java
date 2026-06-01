@@ -42,7 +42,8 @@ public class SecurityConfig {
                         "/swagger-ui.html",
                         "/v3/api-docs/**",
                         "/api/shrinkages/categories/**",
-                        "/api/shrinkages/reasons/**"
+                        "/api/shrinkages/reasons/**",
+                        "/error"
                     ).permitAll()
                     .anyRequest().authenticated()
                 )
