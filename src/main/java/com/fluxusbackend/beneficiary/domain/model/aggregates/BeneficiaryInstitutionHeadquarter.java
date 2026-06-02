@@ -55,4 +55,8 @@ public class BeneficiaryInstitutionHeadquarter extends AuditableAggregateRoot {
     public Address getAddress() {
         return address;
     }
+
+    public void updateDescription(String description) {
+        this.description = Objects.requireNonNull(description, "Description is required");
+    }
 }

@@ -74,4 +74,8 @@ public class RetailUser {
     public void deactivate() {
         status = false;
     }
+
+    public void updateRole(Role role) {
+        this.role = Objects.requireNonNull(role, "Role is required");
+    }
 }

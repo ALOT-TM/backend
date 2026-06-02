@@ -80,4 +80,8 @@ public class Address extends AuditableAggregateRoot {
     public Country getCountry() {
         return country;
     }
+
+    public void updateStreet1(String street1) {
+        this.street1 = Objects.requireNonNull(street1, "Street1 is required");
+    }
 }

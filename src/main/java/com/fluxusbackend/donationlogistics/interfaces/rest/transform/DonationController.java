@@ -7,6 +7,7 @@ import com.fluxusbackend.donationlogistics.domain.model.commands.MarkDonationDel
 import com.fluxusbackend.donationlogistics.domain.model.enums.DonationStatus;
 import com.fluxusbackend.donationlogistics.domain.model.queries.GetDonationByIdQuery;
 import com.fluxusbackend.donationlogistics.domain.model.queries.ListDonationsByBeneficiaryQuery;
+import com.fluxusbackend.donationlogistics.domain.model.queries.ListDonationsByCompanyQuery;
 import com.fluxusbackend.donationlogistics.domain.model.queries.ListDonationsByStatusQuery;
 import com.fluxusbackend.donationlogistics.domain.model.queries.ListDonationStatisticsQuery;
 import com.fluxusbackend.donationlogistics.interfaces.rest.dto.DonationStatisticDto;
@@ -137,6 +138,14 @@ import org.springframework.web.bind.annotation.RestController;
     public List<Donation> listByBeneficiary(@PathVariable Long beneficiaryId) {
         authorizationService.requireActor(UserActor.RETAIL, UserActor.BENEFICIARY);
         return queryService.handle(new ListDonationsByBeneficiaryQuery(new BeneficiaryReferenceId(beneficiaryId)));
+    }
+
+    @GetMapping("/company")
+    @Operation(summary = "List donations for retail company")
+    public List<Donation> listByCompany() {
+        authorizationService.requireActor(UserActor.RETAIL);
+        var companyId = authorizationService.getCurrentUserCompanyId();
+        return queryService.handle(new ListDonationsByCompanyQuery(companyId));
     }
 
     @GetMapping("/statistics")

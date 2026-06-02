@@ -44,6 +44,11 @@ public class DonationCommandServiceImpl implements DonationCommandService {
         var beneficiary = externalBeneficiaryService.fetchBeneficiaryById(command.beneficiaryReferenceId().value())
                 .orElseThrow(() -> new NoSuchElementException("Beneficiary not found"));
 
+        var status = externalShrinkageService.fetchShrinkageStatus(command.shrinkageReferenceId().value());
+        if (!"DONABLE".equals(status) && !"IN_PROCESS".equals(status)) {
+            throw new IllegalStateException("Shrinkage must be DONABLE or IN_PROCESS before registering donation");
+        }
+
         var donation = new Donation(
                 shrinkage,
                 beneficiary,

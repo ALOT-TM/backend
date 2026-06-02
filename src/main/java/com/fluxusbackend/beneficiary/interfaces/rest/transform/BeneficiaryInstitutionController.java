@@ -1,6 +1,7 @@
 package com.fluxusbackend.beneficiary.interfaces.rest.transform;
 
 import com.fluxusbackend.beneficiary.domain.model.aggregates.BeneficiaryInstitution;
+import com.fluxusbackend.beneficiary.domain.model.aggregates.BeneficiaryInstitutionHeadquarter;
 import com.fluxusbackend.beneficiary.domain.model.commands.RegisterBeneficiaryCommand;
 import com.fluxusbackend.beneficiary.domain.model.commands.UpdateBeneficiaryInfoCommand;
 import com.fluxusbackend.beneficiary.domain.model.queries.GetBeneficiaryByIdQuery;
@@ -8,6 +9,12 @@ import com.fluxusbackend.beneficiary.domain.model.queries.ListBeneficiaryInstitu
 import com.fluxusbackend.beneficiary.domain.model.valueobjects.BeneficiaryId;
 import com.fluxusbackend.beneficiary.domain.services.BeneficiaryCommandService;
 import com.fluxusbackend.beneficiary.domain.services.BeneficiaryQueryService;
+import com.fluxusbackend.beneficiary.infrastructure.persistence.jpa.repositories.BeneficiaryInstitutionHeadquarterRepository;
+import com.fluxusbackend.beneficiary.infrastructure.persistence.jpa.repositories.BeneficiaryInstitutionRepository;
+import com.fluxusbackend.location.infrastructure.persistence.jpa.repositories.AddressRepository;
+import com.fluxusbackend.location.infrastructure.persistence.jpa.repositories.CountryRepository;
+import com.fluxusbackend.authaccess.application.internal.services.AuthorizationService;
+import com.fluxusbackend.authaccess.domain.model.enums.UserActor;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -17,14 +24,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
 import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.ResponseStatus;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/api/beneficiary-institutions")
@@ -33,14 +34,75 @@ public class BeneficiaryInstitutionController {
 
     private final BeneficiaryCommandService commandService;
     private final BeneficiaryQueryService queryService;
+    private final AuthorizationService authorizationService;
+    private final BeneficiaryInstitutionRepository beneficiaryInstitutionRepository;
+    private final BeneficiaryInstitutionHeadquarterRepository headquarterRepository;
+    private final CountryRepository countryRepository;
+    private final AddressRepository addressRepository;
 
-        public BeneficiaryInstitutionController(
-                BeneficiaryCommandService commandService,
-                BeneficiaryQueryService queryService
-        ) {
+    public BeneficiaryInstitutionController(
+            BeneficiaryCommandService commandService,
+            BeneficiaryQueryService queryService,
+            AuthorizationService authorizationService,
+            BeneficiaryInstitutionRepository beneficiaryInstitutionRepository,
+            BeneficiaryInstitutionHeadquarterRepository headquarterRepository,
+            CountryRepository countryRepository,
+            AddressRepository addressRepository
+    ) {
         this.commandService = commandService;
         this.queryService = queryService;
+        this.authorizationService = authorizationService;
+        this.beneficiaryInstitutionRepository = beneficiaryInstitutionRepository;
+        this.headquarterRepository = headquarterRepository;
+        this.countryRepository = countryRepository;
+        this.addressRepository = addressRepository;
     }
+
+    @PutMapping("/me")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(name = "bearer")
+    @Operation(summary = "Update logged-in beneficiary institution details")
+    @org.springframework.transaction.annotation.Transactional
+    public BeneficiaryInstitution updateMe(@Valid @RequestBody UpdateBeneficiaryMePayload payload) {
+        authorizationService.requireActor(UserActor.BENEFICIARY);
+        var beneficiaryId = authorizationService.getCurrentBeneficiaryInstitutionId();
+        if (beneficiaryId == null) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Beneficiary institution ID missing");
+        }
+
+        var beneficiary = beneficiaryInstitutionRepository.findById(beneficiaryId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Beneficiary institution not found"));
+
+        beneficiary.updateInfo(beneficiary.getInstitutionType(), payload.name());
+        var savedBeneficiary = beneficiaryInstitutionRepository.save(beneficiary);
+
+        var hqOpt = headquarterRepository.findAll().stream()
+                .filter(h -> h.getBeneficiaryInstitution().getBeneficiaryInstitutionId().equals(beneficiaryId))
+                .findFirst();
+
+        if (hqOpt.isPresent()) {
+            var hq = hqOpt.get();
+            hq.updateDescription(payload.notes());
+            hq.getAddress().updateStreet1(payload.address());
+            headquarterRepository.save(hq);
+        } else {
+            var country = countryRepository.findAll().stream().findFirst()
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "No country available in database"));
+            var address = new com.fluxusbackend.location.domain.model.aggregates.Address(
+                    payload.address(), "", "Lima", "Lima", "15001", country
+            );
+            var savedAddress = addressRepository.save(address);
+            var newHq = new BeneficiaryInstitutionHeadquarter(beneficiary, payload.notes(), savedAddress);
+            headquarterRepository.save(newHq);
+        }
+
+        return savedBeneficiary;
+    }
+
+    public record UpdateBeneficiaryMePayload(
+            @jakarta.validation.constraints.NotBlank String name,
+            @jakarta.validation.constraints.NotBlank String address,
+            String notes
+    ) {}
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
