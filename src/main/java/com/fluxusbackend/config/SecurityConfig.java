@@ -43,6 +43,8 @@ public class SecurityConfig {
                         "/v3/api-docs/**",
                         "/api/shrinkages/categories/**",
                         "/api/shrinkages/reasons/**",
+                        "/api/plans/**",
+                        "/api/subscriptions/**",
                         "/error"
                     ).permitAll()
                     .anyRequest().authenticated()
