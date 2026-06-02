@@ -63,6 +63,7 @@ public class ShrinkageController {
             @ApiResponse(responseCode = "400", description = "Invalid input", content = @Content),
             @ApiResponse(responseCode = "403", description = "Access denied", content = @Content)
     })
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('RETAIL_OPERATOR', 'RETAIL_MANAGER')")
     public Shrinkage registerShrinkage(@Valid @RequestBody RegisterShrinkageCommand command) {
         authorizationService.requireActor(UserActor.RETAIL);
         return commandService.handle(command);
