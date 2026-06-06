@@ -49,7 +49,7 @@ public class DatabaseSeeder implements CommandLineRunner {
 
     private void seedCountries() {
         if (countryRepository.count() == 0) {
-            List<String> countries = List.of("Perú", "Colombia", "Chile", "México", "Ecuador", "Argentina");
+            List<String> countries = List.of("Perú");
             for (String name : countries) {
                 countryRepository.save(new Country(name));
             }

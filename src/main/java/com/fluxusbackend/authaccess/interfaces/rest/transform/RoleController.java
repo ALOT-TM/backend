@@ -1,9 +1,8 @@
 package com.fluxusbackend.authaccess.interfaces.rest.transform;
 
 import com.fluxusbackend.authaccess.application.internal.services.AuthorizationService;
+import com.fluxusbackend.authaccess.application.internal.services.RetailFullAccessRoleService;
 import com.fluxusbackend.authaccess.domain.model.enums.UserActor;
-import com.fluxusbackend.authaccess.domain.model.aggregates.Role;
-import com.fluxusbackend.authaccess.infrastructure.persistence.jpa.repositories.RoleRepository;
 import com.fluxusbackend.companyretail.infrastructure.persistence.jpa.repositories.RetailCompanyRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -19,54 +18,41 @@ import java.util.List;
 @SecurityRequirement(name = "bearer")
 public class RoleController {
 
-    private final RoleRepository roleRepository;
     private final RetailCompanyRepository retailCompanyRepository;
     private final AuthorizationService authorizationService;
+    private final RetailFullAccessRoleService retailFullAccessRoleService;
 
-    public RoleController(RoleRepository roleRepository,
-                          RetailCompanyRepository retailCompanyRepository,
-                          AuthorizationService authorizationService) {
-        this.roleRepository = roleRepository;
+    public RoleController(RetailCompanyRepository retailCompanyRepository,
+                          AuthorizationService authorizationService,
+                          RetailFullAccessRoleService retailFullAccessRoleService) {
         this.retailCompanyRepository = retailCompanyRepository;
         this.authorizationService = authorizationService;
+        this.retailFullAccessRoleService = retailFullAccessRoleService;
     }
 
     @GetMapping
     @Operation(summary = "List roles for current retail company")
     public List<RoleDto> listRoles() {
         authorizationService.requireActor(UserActor.RETAIL);
-        Long companyId = authorizationService.getCurrentUserCompanyId().value();
-        return roleRepository.findByRetailCompany_Id(companyId).stream()
-                .map(role -> new RoleDto(role.getRoleId(), role.getName()))
-                .toList();
+        var role = resolveDefaultRoleForCurrentCompany();
+        return List.of(new RoleDto(role.getRoleId(), role.getName()));
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Create role for current company")
+    @Operation(summary = "Resolve default full access role for current company")
     public RoleDto createRole(@RequestBody CreateRolePayload payload) {
         authorizationService.requireActor(UserActor.RETAIL);
-        Long companyId = authorizationService.getCurrentUserCompanyId().value();
-        var company = retailCompanyRepository.findById(companyId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Company not found"));
-        var role = new Role(company, payload.name());
-        var saved = roleRepository.save(role);
-        return new RoleDto(saved.getRoleId(), saved.getName());
+        var role = resolveDefaultRoleForCurrentCompany();
+        return new RoleDto(role.getRoleId(), role.getName());
     }
 
     @PutMapping("/{roleId}")
-    @Operation(summary = "Update role details")
+    @Operation(summary = "Resolve default full access role")
     public RoleDto updateRole(@PathVariable Long roleId, @RequestBody CreateRolePayload payload) {
         authorizationService.requireActor(UserActor.RETAIL);
-        Long companyId = authorizationService.getCurrentUserCompanyId().value();
-        var role = roleRepository.findById(roleId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Role not found"));
-        if (!role.getRetailCompany().getRetailCompanyId().equals(companyId)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden access");
-        }
-        role.rename(payload.name());
-        var saved = roleRepository.save(role);
-        return new RoleDto(saved.getRoleId(), saved.getName());
+        var role = resolveDefaultRoleForCurrentCompany();
+        return new RoleDto(role.getRoleId(), role.getName());
     }
 
     @DeleteMapping("/{roleId}")
@@ -74,13 +60,15 @@ public class RoleController {
     @Operation(summary = "Delete role")
     public void deleteRole(@PathVariable Long roleId) {
         authorizationService.requireActor(UserActor.RETAIL);
+        resolveDefaultRoleForCurrentCompany();
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "RETAIL_FULL_ACCESS cannot be deleted");
+    }
+
+    private com.fluxusbackend.authaccess.domain.model.aggregates.Role resolveDefaultRoleForCurrentCompany() {
         Long companyId = authorizationService.getCurrentUserCompanyId().value();
-        var role = roleRepository.findById(roleId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Role not found"));
-        if (!role.getRetailCompany().getRetailCompanyId().equals(companyId)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden access");
-        }
-        roleRepository.delete(role);
+        var company = retailCompanyRepository.findById(companyId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Company not found"));
+        return retailFullAccessRoleService.resolveForCompany(company);
     }
 
     public record RoleDto(Long roleId, String name) {}

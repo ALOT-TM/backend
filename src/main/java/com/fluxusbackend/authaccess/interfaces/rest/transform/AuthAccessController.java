@@ -1,5 +1,6 @@
 package com.fluxusbackend.authaccess.interfaces.rest.transform;
 
+import com.fluxusbackend.authaccess.application.internal.services.RetailFullAccessRoleService;
 import com.fluxusbackend.authaccess.domain.model.aggregates.UserAccount;
 import com.fluxusbackend.authaccess.domain.model.commands.RegisterUserCommand;
 import com.fluxusbackend.authaccess.domain.model.dto.AuthenticatedUser;
@@ -24,7 +25,6 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.access.prepost.PreAuthorize;
 import jakarta.validation.Valid;
 import jakarta.transaction.Transactional;
 import org.springframework.http.HttpStatus;
@@ -42,8 +42,8 @@ public class AuthAccessController {
     private final JwtTokenService jwtTokenService;
     private final UserQueryService userQueryService;
     private final com.fluxusbackend.authaccess.infrastructure.persistence.jpa.repositories.UserAccountRepository userAccountRepository;
-    private final com.fluxusbackend.authaccess.infrastructure.persistence.jpa.repositories.RoleRepository roleRepository;
     private final com.fluxusbackend.authaccess.application.internal.services.AuthorizationService authorizationService;
+    private final RetailFullAccessRoleService retailFullAccessRoleService;
 
     public AuthAccessController(
             UserCommandService userCommandService,
@@ -51,16 +51,16 @@ public class AuthAccessController {
             JwtTokenService jwtTokenService,
             UserQueryService userQueryService,
             com.fluxusbackend.authaccess.infrastructure.persistence.jpa.repositories.UserAccountRepository userAccountRepository,
-            com.fluxusbackend.authaccess.infrastructure.persistence.jpa.repositories.RoleRepository roleRepository,
-            com.fluxusbackend.authaccess.application.internal.services.AuthorizationService authorizationService
+            com.fluxusbackend.authaccess.application.internal.services.AuthorizationService authorizationService,
+            RetailFullAccessRoleService retailFullAccessRoleService
     ) {
         this.userCommandService = userCommandService;
         this.userAuthenticationQueryService = userAuthenticationQueryService;
         this.jwtTokenService = jwtTokenService;
         this.userQueryService = userQueryService;
         this.userAccountRepository = userAccountRepository;
-        this.roleRepository = roleRepository;
         this.authorizationService = authorizationService;
+        this.retailFullAccessRoleService = retailFullAccessRoleService;
     }
 
     @PostMapping("/register")
@@ -157,11 +157,11 @@ public class AuthAccessController {
 
     @PutMapping("/users/{userId}/role")
     @SecurityRequirement(name = "bearer")
-    @PreAuthorize("hasRole('RETAIL_MANAGER')")
-    @Operation(summary = "Update user role (MANAGER only)")
+    @Operation(summary = "Assign default full access role")
     @Transactional
     public UserAccountDto updateUserRole(@PathVariable Long userId, @Valid @RequestBody UpdateUserRolePayload payload) {
-        Long managerCompanyId = authorizationService.getCurrentUserCompanyId().value();
+        authorizationService.requireActor(com.fluxusbackend.authaccess.domain.model.enums.UserActor.RETAIL);
+        Long currentCompanyId = authorizationService.getCurrentUserCompanyId().value();
 
         var user = userAccountRepository.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
@@ -169,19 +169,11 @@ public class AuthAccessController {
         var retailUser = user.getRetailUser()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "User is not a retail user"));
 
-        // Cross-tenant validation: Manager and target user must belong to the same company
-        if (!retailUser.getRetailCompany().getRetailCompanyId().equals(managerCompanyId)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Manager and target user company mismatch");
+        if (!retailUser.getRetailCompany().getRetailCompanyId().equals(currentCompanyId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Current and target user company mismatch");
         }
 
-        var role = roleRepository.findById(payload.roleId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Role not found"));
-
-        // Validation: New role must belong to the manager's company
-        if (!role.getRetailCompany().getRetailCompanyId().equals(managerCompanyId)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Role does not belong to this company");
-        }
-
+        var role = retailFullAccessRoleService.resolveForCompany(retailUser.getRetailCompany());
         retailUser.updateRole(role);
         var saved = userAccountRepository.save(user);
         return UserAccountDto.from(saved);

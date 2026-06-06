@@ -10,4 +10,6 @@ public interface RolePermissionRepository extends JpaRepository<RolePermission, 
             com.fluxusbackend.authaccess.domain.model.aggregates.Role role,
             com.fluxusbackend.authaccess.domain.model.aggregates.Permission permission
     );
+
+    void deleteByRole(com.fluxusbackend.authaccess.domain.model.aggregates.Role role);
 }

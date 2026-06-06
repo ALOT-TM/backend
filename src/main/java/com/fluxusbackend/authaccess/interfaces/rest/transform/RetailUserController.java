@@ -1,15 +1,14 @@
 package com.fluxusbackend.authaccess.interfaces.rest.transform;
 
 import com.fluxusbackend.authaccess.application.internal.services.AuthorizationService;
+import com.fluxusbackend.authaccess.application.internal.services.RetailFullAccessRoleService;
 import com.fluxusbackend.authaccess.domain.model.aggregates.RetailUser;
-import com.fluxusbackend.authaccess.domain.model.aggregates.Role;
 import com.fluxusbackend.authaccess.domain.model.aggregates.UserAccount;
 import com.fluxusbackend.authaccess.domain.model.dto.UserAccountDto;
 import com.fluxusbackend.authaccess.domain.model.enums.UserActor;
 import com.fluxusbackend.authaccess.domain.model.valueobjects.EmailAddress;
 import com.fluxusbackend.authaccess.domain.model.valueobjects.PasswordHash;
 import com.fluxusbackend.authaccess.infrastructure.persistence.jpa.repositories.RetailUserRepository;
-import com.fluxusbackend.authaccess.infrastructure.persistence.jpa.repositories.RoleRepository;
 import com.fluxusbackend.authaccess.infrastructure.persistence.jpa.repositories.UserAccountRepository;
 import com.fluxusbackend.companyretail.infrastructure.persistence.jpa.repositories.RetailCompanyRepository;
 import io.swagger.v3.oas.annotations.Operation;
@@ -32,23 +31,23 @@ public class RetailUserController {
 
     private final UserAccountRepository userAccountRepository;
     private final RetailUserRepository retailUserRepository;
-    private final RoleRepository roleRepository;
     private final RetailCompanyRepository retailCompanyRepository;
     private final BCryptPasswordEncoder passwordEncoder;
     private final AuthorizationService authorizationService;
+    private final RetailFullAccessRoleService retailFullAccessRoleService;
 
     public RetailUserController(UserAccountRepository userAccountRepository,
                                 RetailUserRepository retailUserRepository,
-                                RoleRepository roleRepository,
                                 RetailCompanyRepository retailCompanyRepository,
                                 BCryptPasswordEncoder passwordEncoder,
-                                AuthorizationService authorizationService) {
+                                AuthorizationService authorizationService,
+                                RetailFullAccessRoleService retailFullAccessRoleService) {
         this.userAccountRepository = userAccountRepository;
         this.retailUserRepository = retailUserRepository;
-        this.roleRepository = roleRepository;
         this.retailCompanyRepository = retailCompanyRepository;
         this.passwordEncoder = passwordEncoder;
         this.authorizationService = authorizationService;
+        this.retailFullAccessRoleService = retailFullAccessRoleService;
     }
 
     @GetMapping
@@ -76,12 +75,7 @@ public class RetailUserController {
 
         var company = retailCompanyRepository.findById(companyId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Company not found"));
-
-        var role = roleRepository.findById(payload.roleId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Role not found"));
-        if (!role.getRetailCompany().getRetailCompanyId().equals(companyId)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden access to this role");
-        }
+        var role = retailFullAccessRoleService.resolveForCompany(company);
 
         var hash = new PasswordHash(passwordEncoder.encode(payload.password()));
         var user = new UserAccount(new EmailAddress(payload.email()), hash, payload.username());
@@ -114,11 +108,7 @@ public class RetailUserController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email already in use");
         }
 
-        var role = roleRepository.findById(payload.roleId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Role not found"));
-        if (!role.getRetailCompany().getRetailCompanyId().equals(companyId)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Forbidden access to this role");
-        }
+        var role = retailFullAccessRoleService.resolveForCompany(retailUser.getRetailCompany());
 
         user.updateProfile(payload.username(), new EmailAddress(payload.email()));
         retailUser.updateRole(role);

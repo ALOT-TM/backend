@@ -26,7 +26,10 @@ public record AuthenticatedUserPrincipal(
             authorities.add(new SimpleGrantedAuthority("ROLE_" + actor.name()));
         }
         if (roleName != null && !roleName.isBlank()) {
-            authorities.add(new SimpleGrantedAuthority("ROLE_" + roleName.trim().toUpperCase().replace(' ', '_')));
+            var normalizedRole = roleName.trim().toUpperCase().replace(' ', '_');
+            authorities.add(new SimpleGrantedAuthority(
+                    normalizedRole.startsWith("ROLE_") ? normalizedRole : "ROLE_" + normalizedRole
+            ));
         }
         return authorities;
     }

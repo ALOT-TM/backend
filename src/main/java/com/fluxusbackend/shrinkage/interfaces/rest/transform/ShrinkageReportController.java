@@ -29,7 +29,7 @@ public class ShrinkageReportController {
     }
 
     @GetMapping("/shrinkage-summary")
-    @PreAuthorize("hasAnyRole('RETAIL_ANALYST', 'RETAIL_MANAGER') and principal.companyId() != null and principal.companyId().value() == #companyId")
+    @PreAuthorize("hasRole('RETAIL') and principal.companyId() != null and principal.companyId().value() == #companyId")
     @Operation(summary = "Get shrinkage summary for reports")
     public ShrinkageSummaryDto getShrinkageSummary(@RequestParam Long companyId) {
         List<Shrinkage> mermas = shrinkageRepository.findByCompanyIdValue(companyId);
